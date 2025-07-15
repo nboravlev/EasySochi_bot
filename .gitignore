@@ -1,0 +1,24 @@
+# Docker
+*.log
+*.pid
+__pycache__/
+*.pyc
+
+# Python
+.env
+.venv/
+*.sqlite3
+
+# Secrets
+secrets/
+
+# VSCode / IDE
+.vscode/
+.idea/
+
+# PostgreSQL
+pgdata/
+postgres_data/
+
+# Docker volumes
+volumes/
