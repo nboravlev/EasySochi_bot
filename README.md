@@ -58,27 +58,32 @@ echo "your_db_name" > secrets/postgres_db.txt
 docker compose up -d --build
 ```
 
-##Структура проекта
+## Структура проекта
+
+
 EasySochi_bot/
+│
+├── bot/                   # Telegram-бот: логика, хендлеры, состояния
+│   ├── handlers/
+│   ├── states/
+│   └── main.py
+│
+├── db/                    # Модели и миграции базы данных
+│   ├── models/
+│   ├── migrations/
+│   └── db.py
+│   └── postgresql.conf
+│   └── init-pg.sql
+│
+├── secrets/               # Секретные данные (не пушить в git)
+│   ├── postgres_user.txt
+│   ├── postgres_password.txt
+│   └── postgres_db.txt
+│
+├── Dockerfile
+├── docker-compose.yml
+└── README.md
 
- bot/                    Telegram-бот: логика, хендлеры, состояния
-    handlers/
-    states/
-    main.py
-
- db/                     Модели и миграции базы данных
-    models/
-    migrations/
-    db.py
-
- secrets/                Секретные данные (не пушить в git)
-    postgres_user.txt
-    postgres_password.txt
-    postgres_db.txt
-
- Dockerfile
- docker-compose.yml
- README.md
 
 ## Безопасность
  * Конфиденциальные данные (пользователи БД, токены) хранятся через Docker secrets или .env
