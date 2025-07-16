@@ -22,3 +22,20 @@ postgres_data/
 
 # Docker volumes
 volumes/
+
+
+# виртуальное окружение
+venv/
+.venv/
+
+# файлы среды и токены
+.env
+*.env
+secrets/
+*.pyc
+__pycache__/
+
+# временные файлы IDE
+*.swp
+.vscode/
+.idea/
