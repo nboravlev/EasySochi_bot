@@ -32,7 +32,7 @@ Telegram-бот для посуточной аренды жилья в Сочи.
 - `Docker`, `Docker Compose`
 - `FastAPI` (в планах, для админ-панели)
 - `SQLAlchemy`, `Alembic` для работы с БД
-- `.env` / secrets management для хранения конфигураций
+
 
 ---
 
