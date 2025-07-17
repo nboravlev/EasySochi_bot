@@ -1,0 +1,2 @@
+from .db import Base
+from . import models  # Это важно — чтобы импортнулись все модели
