@@ -1,6 +1,7 @@
 import os
 from logging.config import fileConfig
 from pathlib import Path
+import geoalchemy2
 
 from sqlalchemy import engine_from_config, pool
 from alembic import context
@@ -8,9 +9,11 @@ from dotenv import load_dotenv
 
 #from db.models import * 
 from db.db import Base
+#from db.models import all
 
 from db.models.users import User
 from db.models.roles import Role
+from db.models.sessions import Session
 
 # Загрузка .env
 load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
@@ -26,7 +29,8 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Метадата
-print("Metadata:",Base.metadata.tables.keys())
+# Metadata
+print("Detected tables:", list(Base.metadata.tables.keys()))
 target_metadata = Base.metadata
 
 
