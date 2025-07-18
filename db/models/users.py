@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, text, DateTime, Boolean, BIGINT
+from sqlalchemy import Column, Integer, String, ForeignKey, text, DateTime, Boolean, BIGINT, UniqueConstraint
 from sqlalchemy.orm import relationship, validates
 from datetime import datetime
 from db.db import Base
@@ -6,7 +6,10 @@ import re
 
 class User(Base):
     __tablename__ = "users"
-    __table_args__ = {"schema": "public"}
+    __table_args__ = (
+        UniqueConstraint("tg_user_id", "role_id", name="uq_tg_user_role"),
+        {"schema": "public"}
+    )
 
     id = Column(Integer, primary_key=True)
     username = Column(String(50), nullable=False, unique=True)
@@ -26,20 +29,22 @@ class User(Base):
 
     # Bidirectional relationship
     role = relationship("Role", back_populates="users")
+        # связь с сессиями по tg_user_id
+    sessions = relationship("Session",back_populates="user")
 
     @validates('phone_number')
     def validate_phone_number(self, key, phone_number):
         if phone_number:
             # Remove all non-digit characters for validation
             digits_only = re.sub(r'\D', '', phone_number)
-            if len(digits_only) < 10 or len(digits_only) > 15:
-                raise ValueError("Phone number must be between 10 and 15 digits")
+            if len(digits_only) != 10:
+                raise ValueError("Номер телефона 10 цифр")
         return phone_number
 
     @validates('username')
     def validate_username(self, key, username):
         if not username or len(username.strip()) < 3:
-            raise ValueError("Username must be at least 3 characters long")
+            raise ValueError("Username минимум 3 символа")
         return username.strip()
 
     def __repr__(self):

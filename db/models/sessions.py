@@ -10,9 +10,9 @@ class Session(Base):
 
     id = Column(Integer, primary_key=True)
     
-    tg_bot_id = Column(BIGINT, nullable=True)
-    tg_user_id = Column(BIGINT, 
-                ForeignKey("public.users.tg_user_id", ondelete="RESTRICT"),
+    tg_bot_id = Column(BIGINT, nullable=False)
+    user_id = Column(Integer, 
+                ForeignKey("public.users.id", ondelete="RESTRICT"),
                 nullable=False)
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -29,7 +29,8 @@ class Session(Base):
     is_active = Column(Boolean, nullable=False, server_default=text("true"))
 
     # Bidirectional relationship
-    role = relationship("Role", back_populates="users")
+        # обратная связь
+    user = relationship("User", back_populates="sessions")
 
     def __repr__(self):
-        return f"<Session(id={self.id}, tg_user_id={self.tg_user_id}, tg_bot_id={self.tg_bot_id}, Location = {self.location})>"
+        return f"<Session(id={self.id}, user_id={self.ser_id}, tg_bot_id={self.tg_bot_id}, Location = {self.location})>"
