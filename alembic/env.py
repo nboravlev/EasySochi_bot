@@ -1,7 +1,7 @@
 import os
 from logging.config import fileConfig
 from pathlib import Path
-import geoalchemy2
+
 
 from sqlalchemy import engine_from_config, pool
 from alembic import context

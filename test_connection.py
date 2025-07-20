@@ -1,19 +1,26 @@
-from sqlalchemy import create_engine, text
-from dotenv import load_dotenv
+import asyncio
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy import text
+from dotenv import load_dotenv, dotenv_values
 import os
 
-# Загружаем переменные окружения из .env
-load_dotenv()
+# Загружаем .env с перезаписью переменных
+load_dotenv(override=True)
 
-# Получаем строку подключения
 DATABASE_URL = os.getenv("DATABASE_URL")
 print("DATABASE_URL from .env:", DATABASE_URL)
+print(dotenv_values())
 
-try:
-    engine = create_engine(DATABASE_URL)
-    with engine.connect() as connection:
-        result = connection.execute(text("SELECT version();"))
-        print("✅ Connection successful!")
-        print(f"PostgreSQL version: {result.fetchone()[0]}")
-except Exception as e:
-    print(f"❌ Connection failed:\n{e}")
+# Тест асинхронного подключения
+async def test_connection():
+    try:
+        engine = create_async_engine(DATABASE_URL, echo=True)
+        async with engine.connect() as conn:
+            result = await conn.execute(text("SELECT 1"))
+            print("✅ Connection successful:", result.scalar())
+    except Exception as e:
+        print("❌ Connection failed:")
+        print(e)
+
+# Запуск
+asyncio.run(test_connection())
