@@ -4,6 +4,8 @@ from datetime import datetime
 from db.db import Base
 import re
 
+from db.models.roles import Role
+
 class User(Base):
     __tablename__ = "users"
     __table_args__ = (

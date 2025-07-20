@@ -1,5 +1,5 @@
-from .users import User
 from .roles import Role
+from .users import User
 from .sessions import Session
 
-__all__ = ["User", "Role", "Apartment"]
+__all__ = ["User", "Role", "Session"]
