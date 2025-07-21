@@ -39,8 +39,8 @@ class User(Base):
         if phone_number:
             # Remove all non-digit characters for validation
             digits_only = re.sub(r'\D', '', phone_number)
-            if len(digits_only) != 10:
-                raise ValueError("Номер телефона 10 цифр")
+            if len(digits_only) < 10:
+                raise ValueError("Номер телефона не короче 10 цифр")
         return phone_number
 
     @validates('username')

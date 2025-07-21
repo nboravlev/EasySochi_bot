@@ -12,7 +12,7 @@ class Session(Base):
     
     tg_bot_id = Column(BIGINT, nullable=False)
     user_id = Column(Integer, 
-                ForeignKey("public.users.id", ondelete="RESTRICT"),
+                ForeignKey("public.users.id", ondelete="CASCADE"),
                 nullable=False)
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

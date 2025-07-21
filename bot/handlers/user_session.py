@@ -1,6 +1,6 @@
-from sqlalchemy import select
+from sqlalchemy import select, update
 from datetime import datetime
-from db.db import get_async_session
+from db.db_async import get_async_session
 from db.models.users import User
 from db.models.sessions import Session
 
@@ -27,6 +27,7 @@ async def register_user_and_session(tg_user, bot_id: int):
             )
             session.add(user)
             await session.flush()  # чтобы user.id стал доступен
+       
 
         # 3) Создаём новую сессию
         new_session = Session(
