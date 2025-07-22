@@ -10,12 +10,14 @@ class User(Base):
     __tablename__ = "users"
     __table_args__ = (
         UniqueConstraint("tg_user_id", "role_id", name="uq_tg_user_role"),
+        UniqueConstraint("username", "role_id", name="uq_name_role"),
+        UniqueConstraint("phone_number", "role_id", name="uq_phone_role"),
         {"schema": "public"}
     )
 
     id = Column(Integer, primary_key=True)
-    username = Column(String(50), nullable=False, unique=True)
-    phone_number = Column(String(20), nullable=True, unique=True)
+    username = Column(String(50), nullable=False, unique=False)
+    phone_number = Column(String(20), nullable=True, unique=False)
     role_id = Column(
         Integer, 
         ForeignKey("public.roles.id", ondelete="SET DEFAULT"), 
@@ -26,7 +28,7 @@ class User(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # New columns
-    tg_user_id = Column(BIGINT, nullable=True, unique=True)  # Telegram user ID
+    tg_user_id = Column(BIGINT, nullable=True, unique=False)  # Telegram user ID
     is_active = Column(Boolean, nullable=False, server_default=text("true"))
 
     # Bidirectional relationship

@@ -2,7 +2,7 @@ from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from db.db_async import get_async_session
-from db.models.users import User
+
 
 request_phone_keyboard = ReplyKeyboardMarkup(
     keyboard=[

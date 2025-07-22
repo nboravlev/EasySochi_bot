@@ -1,7 +1,8 @@
 from telegram.ext import ApplicationBuilder
 from bot.handlers.start import start_handler
-from bot.handlers.phone_save import phone_save_handler
-from bot.handlers.location_save import location_save_handler
+from bot.handlers.phone_save import phone_save_handler, phone_decline_handler
+from bot.handlers.location_save import location_save_handler, location_decline_handler
+from bot.handlers.role_save import role_handler
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -26,7 +27,15 @@ def main():
     
     app.add_handler(phone_save_handler)
 
+    app.add_handler(phone_decline_handler)
+
     app.add_handler(location_save_handler)
+
+    app.add_handler(location_decline_handler)
+
+    app.add_handler (role_handler)
+
+    
 
 
 

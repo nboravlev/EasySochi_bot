@@ -4,7 +4,7 @@ from db.db_async import get_async_session
 from db.models.users import User
 from db.models.sessions import Session
 
-async def register_user_and_session(tg_user, bot_id: int):
+async def register_user_and_session(tg_user, bot_id: int, role_id:int):
     """
     1. Проверяем, есть ли пользователь с telegram_id.
     2. Если нет — создаём запись в public.users.
@@ -14,15 +14,20 @@ async def register_user_and_session(tg_user, bot_id: int):
 
     async for session in get_async_session():
         result = await session.execute(
-            select(User).where(User.tg_user_id == tg_user.id)
+            select(User).where((User.tg_user_id == tg_user.id)&
+            (User.role_id == role_id))
         )
         user = result.scalars().first()
 
+        is_new_user = False
+
         # 2) Если новый — создаём
         if user is None:
+            is_new_user = True
             user = User(
                 tg_user_id = tg_user.id,
                 username    = tg_user.username,
+                role_id = role_id,
                 created_at  = datetime.utcnow()
             )
             session.add(user)
@@ -40,4 +45,4 @@ async def register_user_and_session(tg_user, bot_id: int):
         # 4) Фиксируем всё одним коммитом
         await session.commit()
         # Можно вернуть объекты, если нужно
-        return user, new_session
+        return user, new_session, is_new_user

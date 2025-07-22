@@ -1,9 +1,11 @@
 from .start import start_handler
 from .phone_save import phone_save_handler
 from .location_save import location_save_handler
+from .role_save import role_handler
 
 __all__ = [
     "start_handler",
     "phone_save_handler",
-    "location_save_handler"
+    "location_save_handler",
+    "role_handler"
 ]

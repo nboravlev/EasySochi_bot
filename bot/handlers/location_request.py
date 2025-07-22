@@ -6,8 +6,8 @@ from db.models.users import User
 
 request_location_keyboard = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="🧭 Поделиться гео", request_location=True)],
-        [KeyboardButton(text="Отклонить")]
+        [KeyboardButton(text="🧭 Отправить гео", request_location=True)],
+        [KeyboardButton(text="Не отправлять")]
     ],
     resize_keyboard=True,
     one_time_keyboard=True
