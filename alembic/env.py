@@ -7,13 +7,19 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 from dotenv import load_dotenv
 
-#from db.models import * 
+
 from db.db import Base
-#from db.models import all
+
 
 from db.models.users import User
 from db.models.roles import Role
 from db.models.sessions import Session
+#from db.models import *
+from db.models.apartments import Apartment
+from db.models.apartment_types import ApartmentType
+from db.models.images import Image
+from db.models.bookings import Booking
+from db.models.booking_types import BookingType
 
 # Загрузка .env
 load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")

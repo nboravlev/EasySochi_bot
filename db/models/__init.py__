@@ -1,5 +1,13 @@
 from .roles import Role
 from .users import User
 from .sessions import Session
+from .booking_types import BookingType
+from .apartment_types import ApartmentType
+from .apartments import Apartment
+from .bookings import Booking
+from .images import Image
 
-__all__ = ["User", "Role", "Session"]
+__all__ = ["User", "Role", "Session","BookingType",
+"ApartmentType", "Booking", "Apartment",
+"Image"
+]

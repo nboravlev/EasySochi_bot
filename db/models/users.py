@@ -33,8 +33,9 @@ class User(Base):
 
     # Bidirectional relationship
     role = relationship("Role", back_populates="users")
-        # связь с сессиями по tg_user_id
     sessions = relationship("Session",back_populates="user")
+    apartment = relationship("Apartment", back_poulates = "owner")
+    booking = relationship("Booking", back_populates = "user")
 
     @validates('phone_number')
     def validate_phone_number(self, key, phone_number):
