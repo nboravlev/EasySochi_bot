@@ -19,7 +19,7 @@ async def save_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_new_user = context.user_data.get("is_new_user")
 
 
-    async for session in get_async_session():
+    async with get_async_session() as session:
         # 1. Находим пользователя по Telegram ID
         result = await session.execute(
             select(User).where(

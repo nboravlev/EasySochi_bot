@@ -34,7 +34,7 @@ class User(Base):
     # Bidirectional relationship
     role = relationship("Role", back_populates="users")
     sessions = relationship("Session",back_populates="user")
-    apartment = relationship("Apartment", back_poulates = "owner")
+    apartment = relationship("Apartment", back_populates = "owner")
     booking = relationship("Booking", back_populates = "user")
 
     @validates('phone_number')

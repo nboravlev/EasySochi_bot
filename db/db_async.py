@@ -4,6 +4,9 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from dotenv import load_dotenv
 import os
 
+from contextlib import asynccontextmanager
+from typing import AsyncGenerator
+
 # Загружаем переменные окружения
 load_dotenv(override=True)
 
@@ -27,15 +30,21 @@ async_session_maker = sessionmaker(
     expire_on_commit=False,  # объекты не станут «откреплёнными» сразу после commit
 )
 
-async def get_async_session() -> AsyncSession:
-    """
-    Контекст‑менеджер для получения AsyncSession.
-    Используйте в виде:
-        async with get_async_session() as session:
-            ...
-    """
+#async def get_async_session() -> AsyncSession:
+#    """
+ #   Контекст‑менеджер для получения AsyncSession.
+ #   Используйте в виде:
+ #       async with get_async_session() as session:
+  #          ...
+  #  """
+ #   async with async_session_maker() as session:
+ #     yield session
+
+
+@asynccontextmanager
+async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     async with async_session_maker() as session:
-        yield session
+       yield session
 
 # Базовый класс для моделей
 Base = declarative_base()

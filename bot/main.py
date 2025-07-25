@@ -3,6 +3,7 @@ from bot.handlers.start import start_handler
 from bot.handlers.phone_save import phone_save_handler, phone_decline_handler
 from bot.handlers.location_save import location_save_handler, location_decline_handler
 from bot.handlers.role_save import role_handler
+from bot.handlers.AddObjectHandler import add_object_conv
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -34,6 +35,11 @@ def main():
     app.add_handler(location_decline_handler)
 
     app.add_handler (role_handler)
+
+    app.add_handler(add_object_conv)
+
+    
+
 
     
 

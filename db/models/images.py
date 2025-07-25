@@ -4,6 +4,7 @@ from sqlalchemy import (
     ForeignKey,
     Boolean,
     DateTime,
+    String,
     text
 )
 from db.db import Base
@@ -19,7 +20,7 @@ class Image(Base):
 
     apartment_id = Column(Integer, ForeignKey("apartments.apartments.id", ondelete="CASCADE"), nullable=False)
 
-    tg_file_id = Column(Integer, nullable=False)  # идентификатор файла в Telegram
+    tg_file_id = Column(String, nullable=False)  # идентификатор файла в Telegram
     is_main = Column(Boolean, nullable=False, default=False, server_default=text("false"))  # главное фото
     is_active = Column(Boolean, nullable=False, default=True, server_default=text("true"))  # включено в выдачу
 

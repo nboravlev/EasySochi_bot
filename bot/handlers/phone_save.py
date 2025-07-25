@@ -4,6 +4,7 @@ from telegram.ext import ContextTypes, MessageHandler, filters
 from db.db_async import get_async_session
 from db.models.users import User
 from sqlalchemy import select, update
+from db.models.sessions import Session
 
 from bot.handlers.location_request import ask_location
 
@@ -13,7 +14,7 @@ async def handle_phone_response(update: Update, context: ContextTypes.DEFAULT_TY
     role_id = context.user_data.get("role_id")
 
 
-    async for session in get_async_session():
+    async with get_async_session() as session:
         result = await session.execute(
               select(User).where(
             (User.tg_user_id == tg_user_id) &

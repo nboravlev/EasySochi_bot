@@ -10,6 +10,6 @@ class ApartmentType(Base):
     name = Column(String(50), nullable=False, unique=True)
     
     # Bidirectional relationship
-    apartment = relationship("Apartment", back_populates="apartment_type")
+    apartments = relationship("Apartment", back_populates="apartment_type")
     
  

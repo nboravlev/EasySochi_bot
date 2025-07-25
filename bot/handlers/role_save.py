@@ -28,7 +28,7 @@ async def handle_role_selection(update: Update, context: ContextTypes.DEFAULT_TY
     user, new_session, is_new_user = await register_user_and_session(tg_user, bot_id, role_id)
 
     context.user_data["is_new_user"] = is_new_user
-    
+    context.user_data["user_id"] = user.id
 
     # Сохраняем session_id, если нужно
     context.user_data["session_id"] = new_session.id

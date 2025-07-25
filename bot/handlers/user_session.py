@@ -3,6 +3,11 @@ from datetime import datetime
 from db.db_async import get_async_session
 from db.models.users import User
 from db.models.sessions import Session
+from db.models.apartments import Apartment
+from db.models.bookings import Booking
+from db.models.apartment_types import ApartmentType
+from db.models.images import Image
+from db.models.booking_types import BookingType
 
 async def register_user_and_session(tg_user, bot_id: int, role_id:int):
     """
@@ -12,7 +17,7 @@ async def register_user_and_session(tg_user, bot_id: int, role_id:int):
     """
 
 
-    async for session in get_async_session():
+    async with get_async_session() as session:
         result = await session.execute(
             select(User).where((User.tg_user_id == tg_user.id)&
             (User.role_id == role_id))

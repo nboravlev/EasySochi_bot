@@ -46,3 +46,7 @@ class Booking(Base):
     user = relationship("User", back_populates="booking")
     apartment = relationship("Apartment", back_populates="booking")
     booking_type = relationship("BookingType", back_populates="booking")
+
+def __repr__(self):
+    return f"<Apartment_id={self.id}, address={self.address}, user_id={self.user_id},status = {self.stutus_id})>"
+
