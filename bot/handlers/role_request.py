@@ -4,7 +4,7 @@ from telegram.ext import ContextTypes
 role_keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="🏠 Хочу арендовать жильё")],
-        [KeyboardButton(text="🏘 Хочу предложить объект")]
+        [KeyboardButton(text="🏘 Хочу сдавать жильё")]
     ],
     resize_keyboard=True,
     one_time_keyboard=True

@@ -28,4 +28,4 @@ class Image(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Optional: связь с Apartment
-    apartment = relationship("Apartment", back_populates="image")
+    apartment = relationship("Apartment", back_populates="images")

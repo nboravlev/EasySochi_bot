@@ -23,6 +23,8 @@ from geoalchemy2.shape import from_shape
 from shapely.geometry import Point
 from bot.handlers.user_session import register_user_and_session
 
+from bot.utils.full_view_owner import render_apartment_card_full
+
 
 # Состояния
 (
@@ -213,7 +215,7 @@ async def handle_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return PRICE
 
     context.user_data["photos"] = []
-    await update.message.reply_text("Загрузите фото объекта. Отправьте все фото, затем напишите 'Готово'.")
+    await update.message.reply_text("Загрузите фото объекта не более 10. Отправьте все фото, затем напишите 'Готово'.")
     return PHOTOS
 
 # ⬇️ Фото
@@ -256,9 +258,20 @@ async def handle_photos_done(update: Update, context: ContextTypes.DEFAULT_TYPE)
         for file_id in context.user_data["photos"]:
             session.add(Image(apartment_id=apt.id, tg_file_id=file_id))
 
-        await session.commit()
+#        await session.commit()
+        await session.flush()
 
-    await update.message.reply_text("✅ Объект успешно добавлен в базу!")
+        await session.refresh(apt, attribute_names=["apartment_type", "images"])
+
+
+        text, media, markup = render_apartment_card_full(apt)
+
+        if media:
+            await update.message.reply_media_group(media)
+        await update.message.reply_text(text, reply_markup=markup, parse_mode="HTML")
+
+        await session.commit()
+        #await update.message.reply_text("✅ Объект успешно добавлен в базу!")
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):

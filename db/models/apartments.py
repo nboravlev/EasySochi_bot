@@ -43,7 +43,7 @@ class Apartment(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     is_active = Column(Boolean, nullable=False, default=True, server_default=text("true"))
-    
+    is_draft = Column(Boolean, nullable=False, default=True, server_default=text("true"))  
     # координаты с пространственным индексом
     coordinates = Column(Geometry(geometry_type='POINT', srid=4326), nullable=True)
 
@@ -51,7 +51,7 @@ class Apartment(Base):
     owner = relationship("User", back_populates="apartment")
     apartment_type = relationship("ApartmentType", back_populates="apartments")
     booking = relationship("Booking", back_populates = "apartment")
-    image = relationship("Image", back_populates = "apartment")
+    images = relationship("Image", back_populates = "apartment")
 
     def __repr__(self):
         return f"<Apartment(id={self.id}, address={self.address}, owner_id={self.owner_id})>"

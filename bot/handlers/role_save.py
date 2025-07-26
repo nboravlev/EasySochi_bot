@@ -7,7 +7,7 @@ from bot.handlers.location_request import ask_location
 
 ROLE_MAPPING = {
     "🏠 Хочу арендовать жильё": 1,
-    "🏘 Хочу предложить объект": 2
+    "🏘 Хочу сдавать жильё": 2
 }
 
 async def handle_role_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -44,4 +44,4 @@ async def handle_role_selection(update: Update, context: ContextTypes.DEFAULT_TY
         await ask_location(update, context)
 
 # Хендлер (экспортируем)
-role_handler = MessageHandler(filters.TEXT & filters.Regex("^(🏠 Хочу арендовать жильё|🏘 Хочу предложить объект)$"), handle_role_selection)
+role_handler = MessageHandler(filters.TEXT & filters.Regex("^(🏠 Хочу арендовать жильё|🏘 Хочу сдавать жильё)$"), handle_role_selection)
