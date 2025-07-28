@@ -1,8 +1,5 @@
 from telegram.ext import ApplicationBuilder
-from bot.handlers.start import start_handler
-from bot.handlers.phone_save import phone_save_handler, phone_decline_handler
-from bot.handlers.location_save import location_save_handler, location_decline_handler
-from bot.handlers.role_save import role_handler
+from bot.handlers.RegistrationHandler import registration_conversation
 from bot.handlers.AddObjectHandler import add_object_conv
 from bot.handlers.ObjectCommitHandler import confirm_apartment_handler
 from bot.handlers.ObjectRedoHandler import redo_apartment_handler
@@ -23,20 +20,8 @@ def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     # Регистрируем хендлеры
-    app.add_handler(start_handler)
-
-    print("Бот запущен. Ожидаю команды /start...")
-
     
-    app.add_handler(phone_save_handler)
-
-    app.add_handler(phone_decline_handler)
-
-    app.add_handler(location_save_handler)
-
-    app.add_handler(location_decline_handler)
-
-    app.add_handler (role_handler)
+    app.add_handler(registration_conversation)
 
     app.add_handler(add_object_conv)
 

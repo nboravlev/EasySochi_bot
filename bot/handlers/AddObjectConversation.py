@@ -21,7 +21,7 @@ from db.models.images import Image
 from utils.geocoding import autocomplete_address
 from geoalchemy2.shape import from_shape
 from shapely.geometry import Point
-from bot.handlers.user_session import register_user_and_session
+from bot.utils.user_session import register_user_and_session
 
 from bot.utils.full_view_owner import render_apartment_card_full
 
@@ -50,7 +50,7 @@ async def start_add_object(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return ADDRESS_INPUT
 
-def shorten_address(label: str, keep_parts: int = 3) -> str:
+def shorten_address(label: str, keep_parts: int = 4) -> str:
     parts = label.split(", ")
     if len(parts) > keep_parts:
         return ", ".join(parts[-keep_parts:])
@@ -275,5 +275,8 @@ async def handle_photos_done(update: Update, context: ContextTypes.DEFAULT_TYPE)
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Операция отменена.")
+    await update.message.reply_text(
+        "❌ Отмена добавления объекта.",
+        reply_markup=ReplyKeyboardRemove()
+    )
     return ConversationHandler.END

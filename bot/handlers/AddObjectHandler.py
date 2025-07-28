@@ -19,7 +19,9 @@ add_object_conv = ConversationHandler(
             MessageHandler(filters.Regex("^(Готово|готово)$"), handle_photos_done),
         ],
     },
-    fallbacks=[CommandHandler("cancel", cancel)],
+    fallbacks=[
+        CommandHandler("cancel", cancel)
+    ]
 )
 
 

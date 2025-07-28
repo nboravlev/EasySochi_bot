@@ -17,6 +17,7 @@ class User(Base):
 
     id = Column(Integer, primary_key=True)
     username = Column(String(50), nullable=False, unique=False)
+    firstname = Column(String(50), nullable=False, unique=False)
     phone_number = Column(String(20), nullable=True, unique=False)
     role_id = Column(
         Integer, 
@@ -30,7 +31,7 @@ class User(Base):
     # New columns
     tg_user_id = Column(BIGINT, nullable=True, unique=False)  # Telegram user ID
     is_active = Column(Boolean, nullable=False, server_default=text("true"))
-
+    is_bot = Column(Boolean, nullable=False, server_default=text("false"))
     # Bidirectional relationship
     role = relationship("Role", back_populates="users")
     sessions = relationship("Session",back_populates="user")

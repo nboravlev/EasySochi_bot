@@ -16,6 +16,7 @@ class Session(Base):
                 nullable=False)
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, nullable=True)
     finished_at = Column(DateTime, nullable=True)
     last_interaction = Column(DateTime, default=datetime.utcnow, nullable=True)
     last_action = Column(Text, nullable=True)  # последнее действие пользователя (опционально)

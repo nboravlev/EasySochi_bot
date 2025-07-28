@@ -31,7 +31,9 @@ async def register_user_and_session(tg_user, bot_id: int, role_id:int):
             is_new_user = True
             user = User(
                 tg_user_id = tg_user.id,
-                username    = tg_user.username,
+                username = tg_user.username,
+                firstname = tg_user.first_name,
+                is_bot = tg_user.is_bot,
                 role_id = role_id,
                 created_at  = datetime.utcnow()
             )
