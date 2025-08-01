@@ -15,13 +15,17 @@ from telegram.ext import (
 )
 
 from db.db_async import get_async_session
+
 from db.models.apartment_types import ApartmentType
 from db.models.apartments import Apartment
 from db.models.images import Image
+from db.models.search_sessions import SearchSession
+
 from utils.geocoding import autocomplete_address
 from geoalchemy2.shape import from_shape
 from shapely.geometry import Point
-from bot.utils.user_session import register_user_and_session
+from bot.utils.session_timeout import set_timeout
+from bot.utils.session_timeout import SessionTimeoutManager
 
 from bot.utils.full_view_owner import render_apartment_card_full
 
@@ -153,6 +157,10 @@ async def handle_apartment_type_selection(update: Update, context: ContextTypes.
 
 # ⬇️ Этаж
 async def handle_floor(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    
+    # Reset 300-second timer
+    #await SessionTimeoutManager.set_timeout(context, user_id) - сброс сессии.
     try:
         floor = int(update.message.text)
         if floor <= 0:
@@ -235,7 +243,7 @@ async def handle_photos_done(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user_id = context.user_data.get("user_id")
     
     if not user_id:
-        await update.message.reply_text("Ошибка: не найден user_id. Пожалуйста, начните сначала.")
+        await update.message.reply_text("Ошибка: не найден user_id. Пожалуйста, начните сначала /start.")
         return ConversationHandler.END
     async with get_async_session() as session:
         apt = Apartment(

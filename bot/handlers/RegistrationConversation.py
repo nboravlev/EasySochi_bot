@@ -9,10 +9,14 @@ from datetime import datetime
 import logging
 
 from db.db_async import get_async_session
+
 from db.models.users import User
 from db.models.sessions import Session
 from db.models.roles import Role
+from db.models.search_sessions import SearchSession
+
 from bot.utils.user_session import register_user_and_session
+from bot.utils.session_timeout import SessionTimeoutManager
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +37,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Привет! Что вы хотите сделать:",
             reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
         )
+
         return CHOOSING_ROLE
     except Exception as e:
         logger.error(f"Error in start handler: {e}")
@@ -76,12 +81,14 @@ async def choose_role(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Пожалуйста, отправьте ваш номер телефона (или нажмите 'Пропустить'):",
                 reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
             )
+
             return ASK_PHONE
         else:
             await update.message.reply_text(
                 "Ваш номер уже есть в базе.",
                 reply_markup=ReplyKeyboardRemove()
             )
+
             return await _ask_for_location(update)
             
     except Exception as e:

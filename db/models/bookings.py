@@ -6,7 +6,7 @@ from sqlalchemy import (
     Date,
     Numeric,
     CheckConstraint,
-    DateTime,Boolean, text
+    DateTime,Boolean, text, Index
 )
 from sqlalchemy.orm import relationship
 from db.db import Base
@@ -16,9 +16,9 @@ from datetime import datetime
 class Booking(Base):
     __tablename__ = "bookings"
     __table_args__ = (
-        
+        Index("idx_booking_apartment_dates", "apartment_id", "check_in", "check_out"),
         CheckConstraint("guest_count > 0", name="check_guest_count_positive"),
-        CheckConstraint("start_date < end_date", name="check_dates_order"),
+        CheckConstraint("check_in < checkout", name="check_dates_order"),
         CheckConstraint("total_price >= 0", name="check_total_price_non_negative"),
         {"schema": "public"}
     )
@@ -29,8 +29,8 @@ class Booking(Base):
     apartment_id = Column(Integer, ForeignKey("apartments.apartments.id", ondelete="CASCADE"), nullable=False)
     status_id = Column(Integer, ForeignKey("public.booking_types.id", ondelete="CASCADE"), nullable=False)
     
-    start_date = Column(Date, nullable=False)
-    end_date = Column(Date, nullable=False)
+    check_in = Column(Date, nullable=False, index = True)
+    check_out = Column(Date, nullable=False, index = True)
     
     guest_count = Column(Integer, nullable=False)
     

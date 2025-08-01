@@ -49,9 +49,9 @@ class Apartment(Base):
 
     # отношения (опционально)
     owner = relationship("User", back_populates="apartment")
-    apartment_type = relationship("ApartmentType", back_populates="apartments")
+    apartment_type = relationship("ApartmentType", back_populates="apartments",lazy = "joined")
     booking = relationship("Booking", back_populates = "apartment")
-    images = relationship("Image", back_populates = "apartment")
+    images = relationship("Image", back_populates = "apartment", lazy="selectin")
 
     def __repr__(self):
         return f"<Apartment(id={self.id}, address={self.address}, owner_id={self.owner_id})>"

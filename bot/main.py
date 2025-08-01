@@ -1,12 +1,12 @@
-from telegram.ext import ApplicationBuilder
+from telegram.ext import ApplicationBuilder, JobQueue
 from bot.handlers.RegistrationHandler import registration_conversation
 from bot.handlers.AddObjectHandler import add_object_conv
 from bot.handlers.ObjectCommitHandler import confirm_apartment_handler
 from bot.handlers.ObjectRedoHandler import redo_apartment_handler
+from bot.handlers.SearchParamsCollectionHandler import search_conv
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-
 
 
 def main():
@@ -16,7 +16,6 @@ def main():
     if not BOT_TOKEN:
         raise ValueError("BOT_TOKEN is not set in .env")
 
-    # Создаём объект приложения
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     # Регистрируем хендлеры
@@ -28,6 +27,8 @@ def main():
     app.add_handler(confirm_apartment_handler)
 
     app.add_handler(redo_apartment_handler)
+
+    app.add_handler(search_conv)
 
     
 

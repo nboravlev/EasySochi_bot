@@ -32,6 +32,7 @@ class Session(Base):
     # Bidirectional relationship
         # обратная связь
     user = relationship("User", back_populates="sessions")
+    search_sessions = relationship("SearchSession", back_populates="session")
 
     def __repr__(self):
         return f"<Session(id={self.id}, user_id={self.ser_id}, tg_bot_id={self.tg_bot_id}, Location = {self.location})>"

@@ -12,6 +12,7 @@ from db.models.roles import Role
 from db.models.sessions import Session
 from db.models.apartments import Apartment
 from db.models.apartment_types import ApartmentType
+from db.models.search_sessions import SearchSession
 
 from db.models.bookings import Booking
 from db.models.booking_types import BookingType
@@ -56,6 +57,7 @@ def run_migrations_offline():
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_schemas=True,
     )
     with context.begin_transaction():
         context.run_migrations()

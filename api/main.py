@@ -15,5 +15,4 @@ app = FastAPI(title="Geo API")
 # Подключаем маршруты
 app.include_router(geocoding.router)
 
-# main.py (если FastAPI запускается отсюда)
 app.include_router(apartment_types.router, prefix="/api")
