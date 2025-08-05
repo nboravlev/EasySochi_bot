@@ -8,6 +8,8 @@ from db.models.bookings import Booking
 from db.models.apartment_types import ApartmentType
 from db.models.images import Image
 from db.models.booking_types import BookingType
+from db.models.booking_chat import BookingChat
+
 
 async def register_user_and_session(tg_user, bot_id: int, role_id:int):
     """

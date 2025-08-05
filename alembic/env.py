@@ -16,6 +16,7 @@ from db.models.search_sessions import SearchSession
 
 from db.models.bookings import Booking
 from db.models.booking_types import BookingType
+from db.models.booking_chat import BookingChat
 
 from db.models.images import Image
 

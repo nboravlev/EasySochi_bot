@@ -38,6 +38,7 @@ class User(Base):
     apartment = relationship("Apartment", back_populates = "owner")
     booking = relationship("Booking", back_populates = "user")
     search_sessions = relationship("SearchSession", back_populates="user")
+    booking_chat = relationship("BookingChat", back_populates="user")
 
     @validates('phone_number')
     def validate_phone_number(self, key, phone_number):

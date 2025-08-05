@@ -26,6 +26,7 @@ from geoalchemy2.shape import from_shape
 from shapely.geometry import Point
 from bot.utils.session_timeout import set_timeout
 from bot.utils.session_timeout import SessionTimeoutManager
+from bot.utils.escape import safe_html
 
 from bot.utils.full_view_owner import render_apartment_card_full
 
@@ -203,12 +204,16 @@ async def handle_pets(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_balcony(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["balcony"] = update.message.text.lower() == "да"
-    await update.message.reply_text("Введите описание объекта:", reply_markup=ReplyKeyboardRemove())
+    await update.message.reply_text("Введите описание объекта (макс. 255 символов):", reply_markup=ReplyKeyboardRemove())
     return DESCRIPTION
 
 # ⬇️ Описание и цена
 async def handle_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["description"] = update.message.text
+    description = safe_html(update.message.text)
+    if len(description) > 255:
+        description = description[:255]
+
+    context.user_data["description"] = description
     await update.message.reply_text("Введите цену за сутки в рублях:")
     return PRICE
 

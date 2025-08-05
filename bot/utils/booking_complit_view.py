@@ -14,7 +14,7 @@ from telegram import (
     InputMediaPhoto
 )
 
-from html import escape
+
 from telegram import InputMediaPhoto
 
 def show_booked_appartment(booking: Booking) -> tuple[str, list[InputMediaPhoto] | None]:
@@ -22,20 +22,19 @@ def show_booked_appartment(booking: Booking) -> tuple[str, list[InputMediaPhoto]
     if apartment is None:
         return "<b>❗ Ошибка: данные квартиры не найдены</b>", None
 
-    # Безопасные значения
-    short_address = escape(apartment.short_address or "Адрес не указан")
-    comments = escape(booking.comments or "Нет комментариев")
-    apt_type = escape(getattr(apartment.apartment_type, "name", "Не указан"))
+
+
 
     # Формируем текст
     text = (
-        f"<b>{short_address}</b>\n\n"
-        f"💬 {comments}\n\n"
-        f"🏷️ Тип: {apt_type}\n"
+        f"<b>{apartment.short_address}</b>\n\n"
+        f"💬 {apartment.description}\n\n"
+        f"🏷️ Тип: {apartment.apartment_type.name}\n"
         f"📍 Заезд: {booking.check_in}\n"
         f"📍 Выезд: {booking.check_out}\n"
         f"🧍‍♂️ Гостей: {booking.guest_count}\n"
-        f"💰 Стоимость: {booking.total_price} ₽"
+        f"💰 Стоимость: {booking.total_price} ₽\n"
+        f"⚡️Номер бронирования: №{booking.id}"
     )
 
     # Подгружаем фото (если есть)

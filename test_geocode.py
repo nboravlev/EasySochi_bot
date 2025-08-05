@@ -1,9 +1,10 @@
 import asyncio
 from utils.geocoding import geocode_address, autocomplete_address
+from bot.utils.escape import safe_html
 
 
 async def main():
-    address = "Сочи Аишхо, 5"
+    address = safe_html("<b>Сочи Аишхо, 5</b>")
     print(address)
     print("🔍 Тест: geocode_address")
     coords = await geocode_address(address)

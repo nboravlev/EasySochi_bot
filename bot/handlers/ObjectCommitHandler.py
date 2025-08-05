@@ -19,7 +19,7 @@ async def confirm_apartment_callback(update: Update, context: ContextTypes.DEFAU
         apt.is_draft = False
         await session.commit()
 
-    await update.callback_query.edit_message_text("✅ Объект подтверждён и готов к показу арендаторам!")
+    await update.callback_query.edit_message_text("✅ Объект <b>ID {apartment_id}</b> подтверждён и готов к показу арендаторам!")
 
 confirm_apartment_handler = CallbackQueryHandler(
     confirm_apartment_callback,

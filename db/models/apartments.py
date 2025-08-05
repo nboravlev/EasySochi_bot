@@ -8,7 +8,8 @@ from sqlalchemy import (
     ForeignKey,
     Numeric,
     CheckConstraint,
-    text
+    text,
+    DECIMAL
 )
 from sqlalchemy.orm import relationship
 from geoalchemy2 import Geometry
@@ -38,7 +39,7 @@ class Apartment(Base):
     max_guests = Column(Integer, nullable=False)
     description = Column(Text, nullable=True)
     price = Column(Numeric(6, 1), nullable=False)
-    reward = Column(Integer, nullable=True, default = 7, server_default='7')
+    reward = Column(Numeric(4, 2), nullable=True, default=DECIMAL("7.00"), server_default='7.00')
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

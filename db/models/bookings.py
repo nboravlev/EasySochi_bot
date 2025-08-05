@@ -40,12 +40,14 @@ class Booking(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     comments = Column(String(255), nullable=True)
+    decline_reason = Column(String(255), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True, server_default=text("true"))
 
     # Optional: связи
     user = relationship("User", back_populates="booking")
     apartment = relationship("Apartment", back_populates="booking")
     booking_type = relationship("BookingType", back_populates="booking")
+    booking_chat = relationship("BookingChat", back_populates = "booking")
 
 def __repr__(self):
     return f"<Apartment_id={self.id}, address={self.address}, user_id={self.user_id},status = {self.stutus_id})>"

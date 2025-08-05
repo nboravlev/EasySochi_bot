@@ -25,6 +25,8 @@ from bot.utils.keyboard_builder import build_types_keyboard, build_price_filter_
 from bot.utils.apts_search_session import get_apartments
 from bot.utils.booking_navigation_view import booking_apartment_card_full
 from bot.utils.booking_complit_view import show_booked_appartment
+from bot.utils.escape import safe_html
+from bot.utils.request_confirmation import send_booking_request_to_owner
 
 from db.models.apartment_types import ApartmentType
 from db.models.apartments import Apartment
@@ -274,7 +276,7 @@ async def filter_apartments(update: Update, context: ContextTypes.DEFAULT_TYPE):
     apartment_ids, apartments, new_search = await get_apartments(check_in, check_out, session_id, user_id, filters)
 
     if not apartment_ids:
-        await send_message(update, "❌ По выбранным параметрам ничего не найдено.\nПопробуйте изменить фильтры или выбрать другие даты.")
+        await send_message(update, "❌ По выбранным параметрам ничего не найдено.\nПопробуйте изменить фильтры или выбрать другие даты /start_search")
 
         return SELECTING_CHECKIN
 
@@ -367,12 +369,15 @@ async def handle_guests_number(update: Update, context: ContextTypes.DEFAULT_TYP
             return GUESTS_NUMBER
 
         context.user_data["guest_count"] = guests_number
-        await update.message.reply_text("Напишите комментарий (или отправьте 'Без комментария'):")
+        await update.message.reply_text("Напишите комментарий (макс. 255 символов) или отправьте 'нет комментария':")
         return BOOKING_COMMENT
 
 
 async def handle_bookings_notion(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["comment"] = update.message.text
+    comment = safe_html(update.message.text)
+    if len(comment) > 255:
+        comment = comment[:255]
+    context.user_data["comment"] = comment
     print(f"[DEBUG] context.user_data: {context.user_data}")
     check_in = context.user_data.get("check_in") 
     check_out = context.user_data.get("check_out")
@@ -400,13 +405,18 @@ async def handle_bookings_notion(update: Update, context: ContextTypes.DEFAULT_T
                 selectinload(Booking.apartment)
                 .selectinload(Apartment.apartment_type),
                 selectinload(Booking.apartment)
-                .selectinload(Apartment.images)
+                .selectinload(Apartment.images),
+                selectinload(Booking.apartment)
+                .selectinload(Apartment.owner) 
             )
             .where(Booking.id == booking.id)
         )
         result = await session.execute(stmt)
         booking_full = result.scalar_one()
-    
+        print(f"[DEBUG] Отправка запроса владельцу для booking_id={booking_full.id}")
+        await send_booking_request_to_owner(context.bot,booking_full)
+        print(f"[DEBUG] Сообщение владельцу должно быть отправлено")
+
         await update.message.reply_text("✅ Ваше бронирование создано. После подтверждения заявки владельцем бот с вами свяжется.")
         text, media = show_booked_appartment(booking_full)
 
