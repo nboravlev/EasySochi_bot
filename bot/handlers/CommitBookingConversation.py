@@ -134,7 +134,7 @@ async def handle_booking_chat_message(update: Update, context: ContextTypes.DEFA
         chat_msg = BookingChat(
             booking_id=booking_id,
             sender_id=sender_id,
-            message_text=text,
+            message_text=text[:255],
             created_at=datetime.utcnow()
         )
         session.add(chat_msg)

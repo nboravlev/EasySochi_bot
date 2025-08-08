@@ -13,7 +13,7 @@ async def send_booking_request_to_owner(bot, booking):
     """
 
     
-    timeout_deadline = (booking.created_at + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M")  # N + 3 часа GMT
+    timeout_deadline = (booking.created_at + timedelta(hours=27)).strftime("%Y-%m-%d %H:%M")  # N + 3 часа GMT
 
     # Расчет комиссии
     commission_percent = booking.apartment.reward/100 or 0

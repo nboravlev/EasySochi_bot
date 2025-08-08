@@ -2,7 +2,8 @@ from bot.handlers.AddObjectConversation import *
 
 
 add_object_conv = ConversationHandler(
-    entry_points=[CommandHandler("add_object", start_add_object)],
+    entry_points=[MessageHandler(filters.TEXT & filters.Regex("^🔑 Добавить объект$"), start_add_object),
+                  CommandHandler("add_object", start_add_object)],
     states={
         ADDRESS_INPUT: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_address_text)],
         ADDRESS_SELECT: [CallbackQueryHandler(handle_address_selection)],

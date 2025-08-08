@@ -15,8 +15,6 @@ from telegram import (
 )
 
 
-from telegram import InputMediaPhoto
-
 def show_booked_appartment(booking: Booking) -> tuple[str, list[InputMediaPhoto] | None]:
     apartment = booking.apartment
     if apartment is None:

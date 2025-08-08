@@ -22,19 +22,19 @@ def main():
 
     # Регистрируем хендлеры
     
-    app.add_handler(registration_conversation)
+    app.add_handler(registration_conversation) #процесс регистрации (users, sessions), выбор роли
 
-    app.add_handler(add_object_conv)
+    app.add_handler(add_object_conv) #процесс создания объекта бронирования
 
-    app.add_handler(confirm_apartment_handler)
+    app.add_handler(confirm_apartment_handler) #проверка и подтверждение создания объекта
 
-    app.add_handler(redo_apartment_handler)
+    app.add_handler(redo_apartment_handler) #отмена создания объекта
 
-    app.add_handler(search_conv)
+    app.add_handler(search_conv) #процесс выбора квартиры для бронирования
 
-    app.add_handler(conv_decline)
+    app.add_handler(conv_decline) #сценарий, когда собственник не подтверждает
 
-    app.add_handler (conv_commit)
+    app.add_handler (conv_commit) #сценарий когда собственник подтверждает. переход в чат
 
     
 

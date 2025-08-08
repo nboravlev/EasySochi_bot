@@ -1,7 +1,8 @@
 from bot.handlers.SearchParamsCollectionConv import *
 
 search_conv = ConversationHandler(
-    entry_points=[CommandHandler("start_search", start_search)],
+    entry_points=[MessageHandler(filters.TEXT & filters.Regex("^🌍 Начать поиск$"), start_search),
+                  CommandHandler("start_search", start_search)],
     states={
         SELECTING_CHECKIN: [CallbackQueryHandler(calendar_callback)],
         SELECTING_CHECKOUT: [CallbackQueryHandler(calendar_callback)],

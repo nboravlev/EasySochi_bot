@@ -19,7 +19,8 @@ def render_apartment_card_full(apartment: Apartment) -> tuple[str, list[InputMed
         f"🏷️ Тип: {apartment.apartment_type.name}\n"
         f"📍 Этаж: {apartment.floor}\n"
         f"🧍‍♂️ Гостей: {apartment.max_guests}\n"
-        f"💰 Цена: {apartment.price} ₽/ночь"
+        f"💰 Цена: {apartment.price} ₽/ночь\n\n"
+        f"💸 Комиссия за бронирование: {apartment.reward}%"
     )
 
     photos = [InputMediaPhoto(img.tg_file_id) for img in apartment.images[:10]] if apartment.images else None
