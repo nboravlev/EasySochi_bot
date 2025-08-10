@@ -27,7 +27,7 @@ from db.models.booking_chat import BookingChat
 from bot.utils.user_session import register_user_and_session
 from bot.utils.owner_objects_request_from_menu import prepare_owner_objects_cards
 from bot.utils.renter_bookings_request_from_menu import prepare_renter_bookings_cards
-from bot.utils.booking_chat_message_history import send_booking_chat_history
+from bot.utils.owner_orders_request_from_menu import prepare_owner_orders_cards
 
 from dotenv import load_dotenv
 import os
@@ -40,31 +40,41 @@ logger = logging.getLogger(__name__)
  ASK_LOCATION,
  VIEW_BOOKINGS,
  VIEW_OBJECTS,
+ VIEW_ORDERS,
  REPORT_PROBLEM,
- BOOKING_CHAT,
  SHOW_HELP
 )= range(8)
 
 # === Роли ===
 ROLE_MAP = {
-    "🏠 Хочу арендовать жильё": 1,  # tenant
-    "🏘 Хочу сдавать жильё": 2     # owner
+    "🏠 арендовать жильё": 1,  # tenant
+    "🏘 сдавать жильё": 2     # owner
 }
 
 # === Дополнительные действия ===
 EXTRA_ACTIONS = {
-    "📑 Просмотреть мои бронирования": VIEW_BOOKINGS,
-    "🏢 Просмотреть мои объекты": VIEW_OBJECTS,
+    "📑 мои бронирования": VIEW_BOOKINGS,
+    "🏢 мои объекты": VIEW_OBJECTS,
     "⚠️ Сообщить о проблеме": REPORT_PROBLEM,
-    "ℹ️ Подробнее о работе бота": SHOW_HELP
+    "ℹ️ Информация": SHOW_HELP
 }
-
+# Функция для группировки кнопок по N в ряд
+def chunk_buttons(buttons, n=2):
+    return [buttons[i:i+n] for i in range(0, len(buttons), n)]
 # === Старт ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        keyboard = [[btn] for btn in ROLE_MAP.keys()] + [[btn] for btn in EXTRA_ACTIONS.keys()]
-        reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+        # Формируем список всех кнопок
+        all_buttons = list(ROLE_MAP.keys()) + list(EXTRA_ACTIONS.keys())
         
+        # Группируем по две в ряд
+        keyboard = chunk_buttons(all_buttons, n=2)
+        
+        reply_markup = ReplyKeyboardMarkup(
+            keyboard,
+            one_time_keyboard=True,
+            resize_keyboard=True
+        )
 
         if update.message:
             await update.message.reply_text(
@@ -274,30 +284,35 @@ async def _ask_for_location(update):
 
 from telegram import ReplyKeyboardMarkup, KeyboardButton
 
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
 async def _handle_redirect(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         role_id = context.user_data.get("role_id")
 
         if not role_id:
-            await update.message.reply_text("Ошибка. Начните заново /start")
+            await update.message.reply_text("⚠️ Ошибка. Начните заново /start")
             return ConversationHandler.END
 
-        if role_id == 1:
-            keyboard = [[KeyboardButton("🌍 Начать поиск")]]
-        elif role_id == 2:
-            keyboard = [[KeyboardButton("🔑 Добавить объект")]]
+        if role_id == 1:  # tenant
+            keyboard = [[InlineKeyboardButton("🔍 Начать поиск", callback_data="start_search")]]
+            prompt = "🏡 Выберите действие:"
+        elif role_id == 2:  # owner
+            keyboard = [[InlineKeyboardButton("➕ Добавить объект", callback_data="add_object")]]
+            prompt = "🏠 Выберите действие:"
         else:
-            await update.message.reply_text("Неизвестная роль. Начните заново /start")
+            await update.message.reply_text("⚠️ Неизвестная роль. Начните заново /start")
             return ConversationHandler.END
 
-        markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-        await update.message.reply_text("Нажмите, чтобы продолжить:", reply_markup=markup)
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(prompt, reply_markup=reply_markup)
 
-    except Exception as e:
-        logger.error(f"Error in redirect: {e}")
-        await update.message.reply_text("Ошибка перенаправления.")
         return ConversationHandler.END
 
+    except Exception as e:
+        logger.error(f"❌ Ошибка в redirect: {e}")
+        await update.message.reply_text("❗ Произошла ошибка при перенаправлении.")
+        return ConversationHandler.END
 
     
 #==== Обработка проблемы ===
@@ -410,8 +425,11 @@ async def show_owner_objects(update: Update, context: ContextTypes.DEFAULT_TYPE)
             except (ValueError, IndexError):
                 await query.message.reply_text("Ошибка индекса. Попробуйте снова.")
                 return CHOOSING_ROLE
+        elif data.startswith("goto_"):
+            return await select_owner_orders(update, context)
         elif data == "back_menu":
             await start (update, context)
+            return 
 
 
     # Ограничиваем индекс допустимым диапазоном
@@ -433,9 +451,97 @@ async def show_owner_objects(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(text, reply_markup=markup, parse_mode="HTML")
 
     return VIEW_OBJECTS    
-       
+
+#=======Проваливаемся в бронирования Лендлорда=======
+async def select_owner_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    apartment_id = int(query.data.split("_")[-1])
+    async with get_async_session() as session:
+    # Получаем активные бронирования по данному объекту
+        stmt = (
+            select(Booking)
+            .options(
+                selectinload(Booking.apartment)
+                .selectinload(Apartment.apartment_type),
+                selectinload(Booking.apartment)
+                .selectinload(Apartment.owner),
+                selectinload(Booking.booking_type)
+            )
+            .where(Booking.apartment_id == apartment_id)
+        )
+        result = await session.execute(stmt)
+        owner_booking_full = result.scalars().all()
+
+
+    if not owner_booking_full:
+        await update.message.reply_text("🏢 Активных бронирований не найдено.")
+        return CHOOSING_ROLE
+    
+    context.user_data["owner_bookings"] = owner_booking_full
+    #await send_message(update, f"ID{apartment_id} 🔍найдено активных бронирований: {len(owner_booking_full)}")
+
+    await show_owner_orders(update,context)
+    
+    return VIEW_ORDERS
+
+async def show_owner_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if query:
+        await query.answer()  # Обязательно!
+
+    data = query.data if query else None
+    print("🔁 Callback получен:", data)
+    # Получаем список объектов из user_data
+    bookings = context.user_data.get("owner_bookings", [])
+    if not bookings:
+        if query:
+            await query.edit_message_text("❌ Список бронирований пуст.")
+        else:
+            await update.message.reply_text("❌ Список бронирований пуст.")
+        return CHOOSING_ROLE
+    
+    # По умолчанию индекс 0
+    current_index = 0
+
+    # Парсим индекс из callback_data
+    if data:
+        if data.startswith("owner_book_next_") or data.startswith("owner_book_prev_"):
+            try:
+                current_index = int(data.split("_")[-1])
+            except (ValueError, IndexError):
+                await query.message.reply_text("Ошибка индекса. Попробуйте снова.")
+                return CHOOSING_ROLE
+        elif data.startswith("back_to_objects"):
+            await select_owner_objects (update,context)
+            return VIEW_OBJECTS
+
+
+
+    # Ограничиваем индекс допустимым диапазоном
+    total = len(bookings)
+    current_index = max(0, min(current_index, total - 1))
+
+    current_booking = bookings[current_index]
+
+    # Генерируем карточку
+    text, markup = prepare_owner_orders_cards(current_booking, current_index, total)
+
+    if query:
+        #await query.answer()  # Обязательно!
+        try:
+            await query.edit_message_text(text, reply_markup=markup, parse_mode="HTML")
+        except Exception as e:
+            await query.message.reply_text("Ошибка при отображении карточки.")
+    else:
+        await update.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
+
+    return VIEW_ORDERS   
+
 #======показ бронирований Арендатору=========
 async def select_renter_bookings (update: Update, context: ContextTypes.DEFAULT_TYPE):
+    ACTIVE_BOOKING_STATUSES = [5, 6]
     tg_user_id = update.effective_user.id
     async with get_async_session() as session:
         result_renter = await session.execute(
@@ -457,7 +563,7 @@ async def select_renter_bookings (update: Update, context: ContextTypes.DEFAULT_
                 selectinload(Booking.booking_type)
             )
             .where((Booking.user_id == renter.id)
-                &(Booking.status_id.in_([5, 6])))
+                &(Booking.status_id.in_(ACTIVE_BOOKING_STATUSES)))
         )
         result = await session.execute(stmt)
         booking_full = result.scalars().all()
@@ -500,20 +606,6 @@ async def show_renter_bookings(update: Update, context: ContextTypes.DEFAULT_TYP
             except (ValueError, IndexError):
                 await query.message.reply_text("Ошибка индекса. Попробуйте снова.")
                 return CHOOSING_ROLE
-        elif data.startswith("book_message_"):
-            try:
-                current_booking = int(data.split("_")[-1])
-                await send_booking_chat_history(current_booking, update)
-                context.user_data["chat_booking_id"] = current_booking
-                await query.message.reply_text(
-                    f"💬 Вы вошли в чат бронирования №{current_booking}.\n"
-                    f"Отправьте свое сообщение."
-                )
-                return BOOKING_CHAT
-            except (ValueError, IndexError):
-                await query.message.reply_text("Ошибка индекса. Попробуйте снова.")
-                return CHOOSING_ROLE
-
 
 
     # Ограничиваем индекс допустимым диапазоном
@@ -639,83 +731,8 @@ async def delete_apartment(apartment_id: int, tg_user_id: int, update: Update, c
 
         await update.callback_query.message.reply_text("✅ Объект успешно удалён.")
 
-        await select_owner_objects(update, context)
+
         return VIEW_OBJECTS
-
-async def booking_chat_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    booking_id = context.user_data.get("chat_booking_id")
-    if not booking_id:
-        return  # пользователь не в контексте чата бронирования
-
-
-    text = update.message.text
-    user_tg_id = update.effective_user.id
-
-    async with get_async_session() as session:
-        # 1. Получаем объект бронирования
-        result = await session.execute(
-            select(Booking).where(Booking.id == booking_id)
-        )
-        booking = result.scalar_one_or_none()
-        if not booking:
-            await update.message.reply_text("❌ Бронирование не найдено.")
-            return
-
-        # 2. Получаем арендатора (user_id -> tg_user_id)
-        result = await session.execute(
-            select(User).where(User.id == booking.user_id)
-        )
-        renter = result.scalar_one_or_none()
-        if not renter:
-            await update.message.reply_text("❌ Арендатор не найден.")
-            return
-
-        renter_id = renter.id
-        renter_tg_id = renter.tg_user_id
-
-        # 3. Получаем владельца по apartment.owner_id
-        result = await session.execute(
-            select(Apartment).where(Apartment.id == booking.apartment_id)
-        )
-        apartment = result.scalar_one_or_none()
-        if not apartment:
-            await update.message.reply_text("❌ Объект не найден.")
-            return
-
-        owner_id = apartment.owner_id
-
-        result = await session.execute(
-            select(User).where(User.id == owner_id)
-        )
-        owner = result.scalar_one_or_none()
-        if not owner:
-            await update.message.reply_text("❌ Владелец не найден.")
-            return
-
-        owner_tg_id = owner.tg_user_id
-
-        # 4. Определяем отправителя
-        sender_id = renter_id if user_tg_id == renter_tg_id else owner_id
-
-        # 5. Сохраняем сообщение
-        chat_msg = BookingChat(
-            booking_id=booking_id,
-            sender_id=sender_id,
-            message_text=text[:255],
-            created_at=datetime.utcnow()
-        )
-        session.add(chat_msg)
-        await session.commit()
-
-    # 6. Определяем получателя
-    recipient_tg_id = owner_tg_id if sender_id == renter_id else renter_tg_id
-
-    # 7. Пересылаем сообщение
-    await context.bot.send_message(
-        chat_id=recipient_tg_id,
-        text=f"💬 Сообщение по бронированию №{booking_id}:\n{text}"
-    )
-
 
 # === Отмена ===
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):

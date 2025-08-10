@@ -22,7 +22,7 @@ async def send_booking_request_to_owner(bot, booking):
     # Формируем текст сообщения
     text = (
         f"‼️ <b>Создано новое бронирование</b> ‼️\n\n"
-        f"Номер бронирования: <b>№{booking.id}</b>\n"
+        f"Идентификатор бронирования: <b>{booking.id}</b>\n"
         f"Гость ожидает подтверждения до <b>{timeout_deadline}МСК</b>, "
         f"иначе заявка будет аннулирована.\n\n"
         f"🏠 ID объекта: {booking.apartment.id}\n"
@@ -38,8 +38,8 @@ async def send_booking_request_to_owner(bot, booking):
     # Inline кнопки
     keyboard = [
         [
-            InlineKeyboardButton("✅ Подтвердить", callback_data=f"booking_confirm:{booking.id}"),
-            InlineKeyboardButton("❌ Отклонить", callback_data=f"booking_decline:{booking.id}")
+            InlineKeyboardButton("✅ Подтвердить", callback_data=f"booking_confirm_{booking.id}"),
+            InlineKeyboardButton("❌ Отклонить", callback_data=f"booking_decline_8_{booking.id}")
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)

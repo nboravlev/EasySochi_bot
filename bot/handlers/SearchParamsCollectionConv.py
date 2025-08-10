@@ -7,7 +7,8 @@ from telegram import (
     InlineKeyboardMarkup,
     ReplyKeyboardMarkup,
     ReplyKeyboardRemove,
-    InputMediaPhoto
+    InputMediaPhoto,
+    KeyboardButton
 )
 from telegram.ext import (
     ConversationHandler,
@@ -27,6 +28,7 @@ from bot.utils.booking_navigation_view import booking_apartment_card_full
 from bot.utils.booking_complit_view import show_booked_appartment
 from bot.utils.escape import safe_html
 from bot.utils.request_confirmation import send_booking_request_to_owner
+from bot.utils.anti_contact_filter import sanitize_message
 
 from db.models.apartment_types import ApartmentType
 from db.models.apartments import Apartment
@@ -45,15 +47,29 @@ from sqlalchemy.orm import selectinload
  GUESTS_NUMBER,
  BOOKING_COMMENT)= range(6)
 
-async def start_search(update: Update, context: CallbackContext):
-    """Старт поиска: инициализация данных пользователя"""
+async def start_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Старт поиска жилья: инициализация данных пользователя"""
+    # Определяем источник вызова
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        # Убираем кнопки, редактируя предыдущее сообщение
+        await query.edit_message_reply_markup(reply_markup=None)
+        target_chat = query.message.chat_id
+    else:
+        target_chat = update.effective_chat.id
+
+    # Инициализация данных пользователя
     context.user_data["check_in"] = None
     context.user_data["check_out"] = None
 
-    await update.message.reply_text(
-        "📅 Выберите дату заезда",
+    # Отправляем новое сообщение с календарём
+    await context.bot.send_message(
+        chat_id=target_chat,
+        text="📅 Выберите дату заезда",
         reply_markup=build_calendar(date.today().year, date.today().month)
     )
+
     return SELECTING_CHECKIN
 
 
@@ -154,7 +170,7 @@ async def handle_apartment_type_multiselection(update: Update, context: ContextT
         selected_names = [t["name"] for t in context.user_data["types"] if t["id"] in selected]
         keyboard = build_price_filter_keyboard()
         await query.edit_message_text(
-            text="✅ Вы выбрали типы: " + ", ".join(selected_names) + "\n💰 Выберите ценовой диапазон:",
+            text="✅ Вы выбрали типы: " + ", ".join(selected_names) + "\n💰 Выберите ценовой интервал:",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
@@ -369,15 +385,22 @@ async def handle_guests_number(update: Update, context: ContextTypes.DEFAULT_TYP
             return GUESTS_NUMBER
 
         context.user_data["guest_count"] = guests_number
-        await update.message.reply_text("Напишите комментарий (макс. 255 символов) или отправьте 'нет комментария':")
+        
+        # Запрашиваем комментарий
+        keyboard = [[KeyboardButton("направить комментарий")]]
+        await update.message.reply_text(
+            "🕊 Вы можете направить собственнику доп.информацию (макс. 255 символов):",
+            reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+        )
         return BOOKING_COMMENT
 
 
 async def handle_bookings_notion(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    comment = safe_html(update.message.text)
-    if len(comment) > 255:
-        comment = comment[:255]
-    context.user_data["comment"] = comment
+    comment = update.message.text.strip()
+    if not comment or comment.lower() == "направить комментарий":
+        comment = "Других подробностей нет"
+    else:
+        comment = sanitize_message(comment)[:255]
     print(f"[DEBUG] context.user_data: {context.user_data}")
     check_in = context.user_data.get("check_in") 
     check_out = context.user_data.get("check_out")
@@ -391,7 +414,7 @@ async def handle_bookings_notion(update: Update, context: ContextTypes.DEFAULT_T
             status_id = 5,
             guest_count = context.user_data['guest_count'],
             total_price = total,
-            comments = context.user_data['comment'],
+            comments = comment,
             check_in = check_in,
             check_out = check_out
         )

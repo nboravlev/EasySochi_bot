@@ -49,10 +49,23 @@ from bot.utils.full_view_owner import render_apartment_card_full
 
 # ⬇️ Старт
 async def start_add_object(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Начало добавления объекта: обработка как команды, так и колбэка"""
+    # Определяем источник вызова
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        # Убираем кнопки у старого сообщения
+        await query.edit_message_reply_markup(reply_markup=None)
+        target_chat = query.message.chat_id
+    else:
+        target_chat = update.effective_chat.id
 
-    await update.message.reply_text(
-        "Давайте добавим объект!\nВведите адрес или его часть:"
+    # Отправляем первое сообщение сценария добавления
+    await context.bot.send_message(
+        chat_id=target_chat,
+        text="Давайте добавим ваш объект!\nВведите адрес или его часть:"
     )
+
     return ADDRESS_INPUT
 
 def shorten_address(label: str, keep_parts: int = 4) -> str:

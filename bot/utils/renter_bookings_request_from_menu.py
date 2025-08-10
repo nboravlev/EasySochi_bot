@@ -4,8 +4,7 @@ from db.models.bookings import Booking
 from telegram import (
     Update,
     InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    InputMediaPhoto
+    InlineKeyboardMarkup
 )
 
 def prepare_renter_bookings_cards(current_booking: Booking, current_index: int, total: int) -> tuple[str, str | None, InlineKeyboardMarkup]:
@@ -34,7 +33,8 @@ def prepare_renter_bookings_cards(current_booking: Booking, current_index: int, 
         buttons.append(InlineKeyboardButton("➡️ Следующий", callback_data=f"book_next_{current_index+1}"))
     
     buttons = [buttons] if buttons else []
-    buttons.append([InlineKeyboardButton("📲 Написать владельцу", callback_data=f"book_message_{current_booking.id}")])
+    buttons.append([InlineKeyboardButton("📲 Написать собственнику", callback_data=f"chat_booking_{current_booking.id}"),
+                    InlineKeyboardButton("❌ Отменить", callback_data=f"booking_decline_9_{current_booking.id}")])
     buttons.append([InlineKeyboardButton("🔙 Вернуться в меню", callback_data="back_menu")])
 
     markup = InlineKeyboardMarkup(buttons)
