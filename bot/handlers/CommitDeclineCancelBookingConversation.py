@@ -105,7 +105,7 @@ async def booking_decline_reason(update: Update, context: ContextTypes.DEFAULT_T
         await context.bot.send_message(
             chat_id=guest_tg_id,
             text=(
-                f"Ваше бронирование №{booking.id} ({booking.booking_type.name}).\n"
+                f"❌ Ваше бронирование №{booking.id} ({booking.booking_type.name}).\n"
                 f"Адрес: {booking.apartment.short_address}\n"
                 f"Причина: {reason}\n\n"
                 f"Хотите создать новое бронирование? 👉 /start"

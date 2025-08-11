@@ -50,7 +50,7 @@ def prepare_owner_objects_cards(current_apartment: Apartment, current_index: int
     if books > 0:
         buttons.append([InlineKeyboardButton("⚙️ Управление бронированиями", callback_data=f"goto_{current_apartment.id}")])
     buttons.append([InlineKeyboardButton("🗑 Удалить объект", callback_data=f"apt_delete_{current_apartment.id}")])
-    buttons.append([InlineKeyboardButton("🔙 Вернуться назад", callback_data="back_to_objects")])
+    buttons.append([InlineKeyboardButton("🔙 Вернуться в меню", callback_data="back_menu")])
 
     markup = InlineKeyboardMarkup(buttons)
     

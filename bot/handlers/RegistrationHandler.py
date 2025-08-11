@@ -24,14 +24,14 @@ registration_conversation = ConversationHandler(
                            CallbackQueryHandler(start, pattern="back_menu")],
         VIEW_ORDERS: [CallbackQueryHandler(show_owner_orders, pattern=r"^owner_book_(next|prev)_\d+$"),
                            CallbackQueryHandler(show_owner_objects, pattern="back_to_objects")],
-        REPORT_PROBLEM: [CommandHandler("support",handle_problem),
+        REPORT_PROBLEM: [
             MessageHandler(filters.TEXT & ~filters.COMMAND, handle_problem)],
-        SHOW_HELP: [CommandHandler("help",help_callback_handler),
-            CallbackQueryHandler(help_callback_handler, pattern="^help_(booking|object)"),
+        SHOW_HELP: [CallbackQueryHandler(help_callback_handler, pattern="^help_(booking|object)"),
                     CallbackQueryHandler(start, pattern="back_menu")]
     },
     fallbacks=[
         CommandHandler("cancel", cancel),
-        CommandHandler("start", start)  # ✅ Allow restart
+        CommandHandler("start", start),# ✅ Allow restart
+        CommandHandler("help",handle_problem)   
     ]
 )

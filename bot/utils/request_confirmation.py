@@ -2,6 +2,8 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from datetime import timedelta
 
+from bot.utils.send_and_pin import send_and_pin_message
+
 async def send_booking_request_to_owner(bot, booking):
     owner_chat_id = booking.apartment.owner.tg_user_id
     print(f"[DEBUG] Вызов send_booking_request_to_owner для owner_id={owner_chat_id}")
@@ -45,9 +47,15 @@ async def send_booking_request_to_owner(bot, booking):
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     # Отправка сообщения
-    await bot.send_message(
+    #await bot.pin_message(
+    #    chat_id=owner_chat_id,
+    #    text=text,
+    #    parse_mode="HTML",
+    #    reply_markup=reply_markup
+    #)
+    await send_and_pin_message(
+        bot=bot,
         chat_id=owner_chat_id,
         text=text,
-        parse_mode="HTML",
         reply_markup=reply_markup
     )

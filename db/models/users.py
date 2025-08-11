@@ -17,7 +17,7 @@ class User(Base):
 
     id = Column(Integer, primary_key=True)
     username = Column(String(50), nullable=False, unique=False)
-    firstname = Column(String(50), nullable=False, unique=False)
+    firstname = Column(String(50), nullable=True, unique=False)
     phone_number = Column(String(20), nullable=True, unique=False)
     role_id = Column(
         Integer, 

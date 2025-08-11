@@ -3,7 +3,8 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     ReplyKeyboardMarkup,
-    ReplyKeyboardRemove
+    ReplyKeyboardRemove,
+    KeyboardButton
 )
 from telegram.ext import (
     ConversationHandler,
@@ -27,6 +28,7 @@ from shapely.geometry import Point
 from bot.utils.session_timeout import set_timeout
 from bot.utils.session_timeout import SessionTimeoutManager
 from bot.utils.escape import safe_html
+from bot.utils.anti_contact_filter import sanitize_message
 
 from bot.utils.full_view_owner import render_apartment_card_full
 
@@ -217,15 +219,22 @@ async def handle_pets(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_balcony(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["balcony"] = update.message.text.lower() == "да"
-    await update.message.reply_text("Введите описание объекта (макс. 255 символов):", reply_markup=ReplyKeyboardRemove())
+    # Запрашиваем комментарий
+    keyboard = [[KeyboardButton("без описания")]]
+    await update.message.reply_text(
+            "🏕 Напишите не очень длинное, привлекательное описание, или нажмите кнопку, чтобы пропустить:",
+            reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+        )
     return DESCRIPTION
 
 # ⬇️ Описание и цена
 async def handle_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    description = safe_html(update.message.text)
-    if len(description) > 255:
-        description = description[:255]
+    description = update.message.text.strip()
 
+    if not description or description.lower() == "без описания":
+        description = "Собственник не предоставил доп.информации"
+    else:
+        description = sanitize_message(description)[:255]
     context.user_data["description"] = description
     await update.message.reply_text("Введите цену за сутки в рублях:")
     return PRICE
@@ -241,7 +250,15 @@ async def handle_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return PRICE
 
     context.user_data["photos"] = []
-    await update.message.reply_text("Загрузите фото объекта не более 10. Отправьте все фото, затем напишите 'Готово'.")
+    await update.message.reply_text(
+    "Загрузите фото объекта (не более 10). "
+    "Отправьте все фото, затем нажмите «Готово».",
+    reply_markup=ReplyKeyboardMarkup(
+        [[KeyboardButton("Готово")]],
+        resize_keyboard=True,
+        one_time_keyboard=False
+        )
+    )
     return PHOTOS
 
 # ⬇️ Фото
@@ -253,7 +270,15 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     print(f"[DEBUG] Добавлено фото: {file_id}")
     print(f"[DEBUG] Все фото: {context.user_data['photos']}")
-
+    await update.message.reply_text(
+        f"Фото добавлено ({len(context.user_data['photos'])} шт.). "
+        "Загрузите ещё или нажмите «Готово».",
+        reply_markup=ReplyKeyboardMarkup(
+            [[KeyboardButton("Готово")]],
+            resize_keyboard=True,
+            one_time_keyboard=True
+        )
+    )
     return PHOTOS
 
 async def handle_photos_done(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -28,11 +28,10 @@ from telegram.ext import (
 async def post_init(application: Application) -> None:
     # Настройка меню команд (синяя плашка)
     commands = [
-        BotCommand("start", "🚀 Запустить бота"),
-        BotCommand("help", "❓ Помощь"),
-        BotCommand("support", "🛠 Написать админу"),
+        BotCommand("start", "🚀 Перезапустить бот"),
+        BotCommand("help", "🚨 Помощь"),
         BotCommand("cancel", "⛔ Отменить действие"),
-        BotCommand('exit_chat', "⛓️ Прервать чат с пользователем")
+        BotCommand('exit_chat', "☎️ Прервать чат с пользователем")
     ]
     await application.bot.set_my_commands(commands)
 
