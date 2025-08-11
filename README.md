@@ -63,26 +63,51 @@ docker compose up -d --build
 
 EasySochi_bot/
 │
-├── bot/                   # Telegram-бот: логика, хендлеры, состояния
-│   ├── handlers/
-│   ├── states/
-│   └── main.py
-│
-├── db/                    # Модели и миграции базы данных
-│   ├── models/
-│   ├── migrations/
-│   └── db.py
-│   └── postgresql.conf
-│   └── init-pg.sql
-│
-├── secrets/               # Секретные данные (не пушить в git)
-│   ├── postgres_user.txt
-│   ├── postgres_password.txt
-│   └── postgres_db.txt
-│
 ├── Dockerfile
+├── README.md
+├── alembic
+│   ├── README
+│   ├── env.py
+│   ├── script.py.mako
+│   └── versions
+├── alembic.ini
+├── api
+│   ├── main.py
+│   └── routes
+├── bot
+│   ├── Dockerfile
+│   ├── entrypoint.sh
+│   ├── handlers
+│   ├── main.py
+│   └── utils
+├── db
+│   ├── __init.py__
+│   ├── db.py
+│   ├── db_async.py
+│   └── models
 ├── docker-compose.yml
-└── README.md
+├── init-pg.sql
+├── postgresql.conf
+├── requirements.txt
+├── reset_db.py
+├── schemas
+│   ├── __init.py__
+│   └── apartment_types.py
+├── secrets
+│   ├── bot_token.txt
+│   ├── postgres_db.txt
+│   ├── postgres_password.txt
+│   └── postgres_user.txt
+├── test_connection.py
+├── test_geocode.py
+├── utils
+│   └── geocoding.py
+└── venv
+    ├── bin
+    ├── include
+    ├── lib
+    ├── lib64 -> lib
+    └── pyvenv.cfg
 
 
 ## Безопасность

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from sqlalchemy import engine_from_config, pool
 from alembic import context
-from dotenv import load_dotenv
+
 
 from db.models.users import User
 from db.models.roles import Role
@@ -22,11 +22,16 @@ from db.models.images import Image
 
 from db.db import Base
 
-# Загрузка .env
-load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
+import os
+
 DATABASE_URL = os.getenv("DATABASE_URL")
+
 if not DATABASE_URL:
-    raise ValueError("DATABASE_URL is not set in .env")
+    raise RuntimeError("Postgres credentials are not set in environment variables")
+
+DATABASE_URL = DATABASE_URL
+# Загрузка .env
+
 
 def include_object(object, name, type_, reflected, compare_to):
     if type_ == "table" and name == "spatial_ref_sys":

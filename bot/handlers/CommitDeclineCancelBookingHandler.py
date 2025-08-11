@@ -1,4 +1,4 @@
-from bot.handlers.CommitDeclineCancelBookingConversation import *
+from handlers.CommitDeclineCancelBookingConversation import *
 
 conv_commit_decline_cancel = ConversationHandler(
     entry_points=[CallbackQueryHandler(booking_decline_callback, pattern=r"^booking_decline_\d+_\d+$"),

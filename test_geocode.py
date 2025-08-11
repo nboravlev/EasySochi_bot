@@ -1,5 +1,5 @@
 import asyncio
-from utils.geocoding import geocode_address, autocomplete_address
+from bot.utils.geocoding import geocode_address, autocomplete_address
 from bot.utils.escape import safe_html
 
 

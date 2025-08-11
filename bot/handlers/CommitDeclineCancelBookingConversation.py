@@ -21,7 +21,7 @@ from db.db_async import get_async_session
 from db.models.bookings import Booking
 from db.models.apartments import Apartment
 
-from bot.utils.escape import safe_html
+from utils.escape import safe_html
 
 from sqlalchemy import select, update as sa_update
 

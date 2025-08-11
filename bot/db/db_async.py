@@ -1,19 +1,22 @@
 
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from dotenv import load_dotenv
 import os
 
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-# Загружаем переменные окружения
-load_dotenv(override=True)
+POSTGRES_USER = os.getenv("POSTGRES_USER")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
+POSTGRES_DB = os.getenv("POSTGRES_DB")
+POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
+
+if not (POSTGRES_USER and POSTGRES_PASSWORD and POSTGRES_DB):
+    raise RuntimeError("Postgres credentials are not set in environment variables")
 
 # Получаем строку подключения из .env
-DATABASE_URL = os.getenv("DATABASE_URL_ASYNC")
-if not DATABASE_URL:
-    raise ValueError("DATABASE_URL_ASYNC is not set in .env")
+DATABASE_URL = DATABASE_URL = f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@db:{POSTGRES_PORT}/{POSTGRES_DB}"
+
 
 
 # Двигаем SQLAlchemy в async‑режим

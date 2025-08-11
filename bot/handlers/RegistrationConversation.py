@@ -24,10 +24,10 @@ from db.models.apartments import Apartment
 from db.models.bookings import Booking
 from db.models.booking_chat import BookingChat
 
-from bot.utils.user_session import register_user_and_session
-from bot.utils.owner_objects_request_from_menu import prepare_owner_objects_cards
-from bot.utils.renter_bookings_request_from_menu import prepare_renter_bookings_cards
-from bot.utils.owner_orders_request_from_menu import prepare_owner_orders_cards
+from utils.user_session import register_user_and_session
+from utils.owner_objects_request_from_menu import prepare_owner_objects_cards
+from utils.renter_bookings_request_from_menu import prepare_renter_bookings_cards
+from utils.owner_orders_request_from_menu import prepare_owner_orders_cards
 
 from dotenv import load_dotenv
 import os

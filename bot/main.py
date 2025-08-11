@@ -1,14 +1,15 @@
 from telegram.ext import ApplicationBuilder, JobQueue
-from bot.handlers.RegistrationHandler import registration_conversation
-from bot.handlers.AddObjectHandler import add_object_conv
-from bot.handlers.ObjectCommitHandler import confirm_apartment_handler
-from bot.handlers.ObjectRedoHandler import redo_apartment_handler
-from bot.handlers.SearchParamsCollectionHandler import search_conv
-from bot.handlers.CommitDeclineCancelBookingHandler import conv_commit_decline_cancel
-from bot.handlers.BookingChatHandler import booking_chat
+from handlers.RegistrationHandler import registration_conversation
+from handlers.AddObjectHandler import add_object_conv
+from handlers.ObjectCommitHandler import confirm_apartment_handler
+from handlers.ObjectRedoHandler import redo_apartment_handler
+from handlers.SearchParamsCollectionHandler import search_conv
+from handlers.CommitDeclineCancelBookingHandler import conv_commit_decline_cancel
+from handlers.BookingChatHandler import booking_chat
 import os
 from pathlib import Path
-from dotenv import load_dotenv
+
+import os
 
 from telegram import (
     Update,
@@ -36,14 +37,14 @@ async def post_init(application: Application) -> None:
     await application.bot.set_my_commands(commands)
 
 def main():
-    # Загрузка .env
-    load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
     BOT_TOKEN = os.getenv("BOT_TOKEN")
     if not BOT_TOKEN:
         raise ValueError("BOT_TOKEN is not set in .env")
 
 
     app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
+
+
 
     # Регистрируем хендлеры
     

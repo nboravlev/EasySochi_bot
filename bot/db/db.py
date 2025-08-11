@@ -1,10 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
-from dotenv import load_dotenv
 import os
 
-# Загружаем переменные окружения
-load_dotenv(override=True)
 
 # Получаем строку подключения из .env
 DATABASE_URL = os.getenv("DATABASE_URL")

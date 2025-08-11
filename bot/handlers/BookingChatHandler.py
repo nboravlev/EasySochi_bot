@@ -1,4 +1,4 @@
-from bot.handlers.BookingChatConversation import *
+from handlers.BookingChatConversation import *
 
 booking_chat = ConversationHandler(
     entry_points=[

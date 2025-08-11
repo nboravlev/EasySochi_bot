@@ -1,4 +1,4 @@
-from bot.handlers.SearchParamsCollectionConv import *
+from handlers.SearchParamsCollectionConv import *
 
 search_conv = ConversationHandler(
     entry_points=[CommandHandler("start_search", start_search),

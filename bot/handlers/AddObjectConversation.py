@@ -25,12 +25,12 @@ from db.models.search_sessions import SearchSession
 from utils.geocoding import autocomplete_address
 from geoalchemy2.shape import from_shape
 from shapely.geometry import Point
-from bot.utils.session_timeout import set_timeout
-from bot.utils.session_timeout import SessionTimeoutManager
-from bot.utils.escape import safe_html
-from bot.utils.anti_contact_filter import sanitize_message
+from utils.session_timeout import set_timeout
+from utils.session_timeout import SessionTimeoutManager
+from utils.escape import safe_html
+from utils.anti_contact_filter import sanitize_message
 
-from bot.utils.full_view_owner import render_apartment_card_full
+from utils.full_view_owner import render_apartment_card_full
 
 
 # Состояния

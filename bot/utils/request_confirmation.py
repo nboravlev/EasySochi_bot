@@ -2,7 +2,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from datetime import timedelta
 
-from bot.utils.send_and_pin import send_and_pin_message
+from utils.send_and_pin import send_and_pin_message
 
 async def send_booking_request_to_owner(bot, booking):
     owner_chat_id = booking.apartment.owner.tg_user_id

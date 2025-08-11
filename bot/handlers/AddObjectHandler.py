@@ -1,4 +1,4 @@
-from bot.handlers.AddObjectConversation import *
+from handlers.AddObjectConversation import *
 
 
 add_object_conv = ConversationHandler(

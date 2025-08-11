@@ -23,9 +23,9 @@ from db.models.apartments import Apartment
 from db.models.booking_chat import BookingChat
 from db.models.users import User
 
-from bot.utils.escape import safe_html
-from bot.utils.anti_contact_filter import sanitize_message
-from bot.utils.booking_chat_message_history import send_booking_chat_history
+from utils.escape import safe_html
+from utils.anti_contact_filter import sanitize_message
+from utils.booking_chat_message_history import send_booking_chat_history
 
 from sqlalchemy import select, update as sa_update
 

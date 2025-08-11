@@ -1,6 +1,6 @@
 # Fixed ConversationHandler configuration
 
-from bot.handlers.RegistrationConversation import *
+from handlers.RegistrationConversation import *
 
 registration_conversation = ConversationHandler(
     entry_points=[CommandHandler("start", start),

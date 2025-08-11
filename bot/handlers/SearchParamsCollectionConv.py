@@ -21,14 +21,14 @@ from telegram.ext import (
 )
 from db.db_async import get_async_session
 
-from bot.utils.calendar_keyboard import build_calendar, CB_NAV, CB_SELECT
-from bot.utils.keyboard_builder import build_types_keyboard, build_price_filter_keyboard
-from bot.utils.apts_search_session import get_apartments
-from bot.utils.booking_navigation_view import booking_apartment_card_full
-from bot.utils.booking_complit_view import show_booked_appartment
-from bot.utils.escape import safe_html
-from bot.utils.request_confirmation import send_booking_request_to_owner
-from bot.utils.anti_contact_filter import sanitize_message
+from utils.calendar_keyboard import build_calendar, CB_NAV, CB_SELECT
+from utils.keyboard_builder import build_types_keyboard, build_price_filter_keyboard
+from utils.apts_search_session import get_apartments
+from utils.booking_navigation_view import booking_apartment_card_full
+from utils.booking_complit_view import show_booked_appartment
+from utils.escape import safe_html
+from utils.request_confirmation import send_booking_request_to_owner
+from utils.anti_contact_filter import sanitize_message
 
 from db.models.apartment_types import ApartmentType
 from db.models.apartments import Apartment
