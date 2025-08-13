@@ -96,6 +96,7 @@ async def booking_decline_reason(update: Update, context: ContextTypes.DEFAULT_T
             text=(
                 f"❌ Гость отменил бронирование. №{booking.id} ({booking.booking_type.name}).\n"
                 f"Адрес: {booking.apartment.short_address}\n"
+                f"C: {booking.check_in} по: {booking.check_out}\n"
                 f"Причина: {reason}"
             )
         )
@@ -107,6 +108,7 @@ async def booking_decline_reason(update: Update, context: ContextTypes.DEFAULT_T
             text=(
                 f"❌ Ваше бронирование №{booking.id} ({booking.booking_type.name}).\n"
                 f"Адрес: {booking.apartment.short_address}\n"
+                f"C: {booking.check_in} по: {booking.check_out}\n"
                 f"Причина: {reason}\n\n"
                 f"Хотите создать новое бронирование? 👉 /start"
             )

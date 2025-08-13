@@ -6,6 +6,9 @@ from handlers.ObjectRedoHandler import redo_apartment_handler
 from handlers.SearchParamsCollectionHandler import search_conv
 from handlers.CommitDeclineCancelBookingHandler import conv_commit_decline_cancel
 from handlers.BookingChatHandler import booking_chat
+
+from db_monitor import check_db
+import asyncio
 import os
 from pathlib import Path
 
@@ -35,6 +38,9 @@ async def post_init(application: Application) -> None:
         BotCommand('exit_chat', "⏸️ Выйти из диалога с пользователем")
     ]
     await application.bot.set_my_commands(commands)
+
+    asyncio.create_task(check_db(application.bot))
+
 
 def main():
     BOT_TOKEN = os.getenv("BOT_TOKEN")

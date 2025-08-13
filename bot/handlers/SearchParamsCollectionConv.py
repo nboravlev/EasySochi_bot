@@ -231,6 +231,13 @@ async def handle_price_filter_type_selection(update: Update, context: ContextTyp
         context.user_data["actual_price"] = price
         await handle_guests_number(update, context)
         return GUESTS_NUMBER
+    elif data == "start_search":
+        # Сброс всех пользовательских данных, связанных с поиском
+        for key in ["check_in", "check_out", "price_filter", "chosen_apartment", "actual_price", "apartment_type"]:
+            context.user_data.pop(key, None)
+
+        await start_search(update, context)
+        return SELECTING_CHECKIN 
     else:
         await query.message.reply_text("Ошибка выбора, попробуйте снова.")
         return PRICE_FILTER_SELECTION

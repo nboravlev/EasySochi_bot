@@ -7,7 +7,8 @@ search_conv = ConversationHandler(
         SELECTING_CHECKIN: [CallbackQueryHandler(calendar_callback)],
         SELECTING_CHECKOUT: [CallbackQueryHandler(calendar_callback)],
         APTS_TYPES_SELECTION: [CallbackQueryHandler(handle_apartment_type_multiselection)],
-        PRICE_FILTER_SELECTION: [CallbackQueryHandler(handle_price_filter_type_selection)],
+        PRICE_FILTER_SELECTION: [CallbackQueryHandler(handle_price_filter_type_selection),
+                          CommandHandler("start_search",start_search)],
         GUESTS_NUMBER: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_guests_number)],
         BOOKING_COMMENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_bookings_notion)]
                 },

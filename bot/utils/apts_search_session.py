@@ -19,10 +19,13 @@ async def get_apartments(
     price = filters.get("price", {})
 
     async with get_async_session() as session:
-        stmt = select(Apartment).where(
+        stmt = (select(Apartment).where(
                 Apartment.is_draft.is_(False),
                 Apartment.is_active.is_(True)
-            )
+            ).order_by(
+                Apartment.price.desc(),
+                Apartment.created_at.desc()
+            ))
 
         # ✅ Фильтр по типам
         if type_ids:

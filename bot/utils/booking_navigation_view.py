@@ -36,7 +36,8 @@ def booking_apartment_card_full(current_apartment: Apartment, current_index: int
         buttons.append(InlineKeyboardButton("➡️ Следующий", callback_data=f"apt_next_{current_index+1}"))
 
     buttons = [buttons] if buttons else []
-    buttons.append([InlineKeyboardButton("✅ Забронировать", callback_data=f"book_{current_apartment.id}_{current_apartment.price}")])
+    buttons.append([InlineKeyboardButton("✅ Забронировать", callback_data=f"book_{current_apartment.id}_{current_apartment.price}"),
+                   InlineKeyboardButton("🔍 Новый поиск", callback_data="start_search")])
 
     markup = InlineKeyboardMarkup(buttons)
 

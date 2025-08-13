@@ -47,8 +47,8 @@ def prepare_owner_orders_cards(current_booking: Booking, current_index: int, tot
             InlineKeyboardButton("❌ Отклонить", callback_data=f"booking_decline_8_{current_booking.id}")
     ])
     if status == 'подтверждено':
-        buttons.append([InlineKeyboardButton("❌ Отменить", callback_data=f"booking_decline_10_{current_booking.id}")])
-        buttons.append([InlineKeyboardButton("🕊 Написать гостю", callback_data=f"chat_booking_{current_booking.id}")])
+        buttons.append([InlineKeyboardButton("❌ Отменить", callback_data=f"booking_decline_10_{current_booking.id}"),
+                        InlineKeyboardButton("🕊 Написать гостю", callback_data=f"chat_booking_{current_booking.id}")])
     buttons.append([InlineKeyboardButton("🔙 Вернуться назад", callback_data="back_to_objects")])
 
     markup = InlineKeyboardMarkup(buttons)
