@@ -143,7 +143,7 @@ async def booking_chat_message(update: Update, context: ContextTypes.DEFAULT_TYP
     await context.bot.send_message(
         chat_id=recipient_tg_id,
         text=f"💬 Новое сообщение по бронированию №{booking_id}:\n\n{clean_text}\n\n"
-             f"ℹ️ Отправитель: {'Гость' if sender_type == 'guest' else 'Владелец'}",
+             f"ℹ️ Отправитель: {'Гость' if sender_type == 'guest' else 'Собственник'}",
         reply_markup=reply_markup
     )
 

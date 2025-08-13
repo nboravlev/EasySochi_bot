@@ -23,6 +23,7 @@ from db.models.images import Image
 from db.models.search_sessions import SearchSession
 
 from utils.geocoding import autocomplete_address
+from utils.replace_index_in_address import replace_adler_with_kp_regex
 from geoalchemy2.shape import from_shape
 from shapely.geometry import Point
 from utils.session_timeout import set_timeout
@@ -89,6 +90,7 @@ async def handle_address_selection(update: Update, context: ContextTypes.DEFAULT
         
         index = int(index_str)
         selected = context.user_data["addr_candidates"][index]
+        
 
     except Exception as e:
         print(f"[ERROR] Ошибка при извлечении адреса: {e}")
@@ -97,7 +99,8 @@ async def handle_address_selection(update: Update, context: ContextTypes.DEFAULT
 
 
     label = selected["label"]
-    short_label = shorten_address(label)
+    short_label_zipcode = shorten_address(label)
+    short_label = replace_adler_with_kp_regex(short_label_zipcode)
     lat = selected["lat"]
     lon = selected["lon"]
     point = from_shape(Point(lon, lat), srid=4326)
@@ -131,14 +134,14 @@ async def handle_address_selection(update: Update, context: ContextTypes.DEFAULT
 async def handle_address_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.message.text
     suggestions = await autocomplete_address(query)
-
+    print(f"SUGGESTION:{suggestions}")
     if not suggestions:
         await update.message.reply_text("Адрес не найден. Повторите ввод.")
         return ADDRESS_INPUT
     
         # Добавляем короткие адреса
     for s in suggestions:
-        s["short_label"] = shorten_address(s["label"])
+        s["short_label"] = replace_adler_with_kp_regex(shorten_address(s["label"]))
 
 
     context.user_data["addr_candidates"] = suggestions

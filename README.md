@@ -15,12 +15,15 @@ Telegram-бот для посуточной аренды жилья в Сочи.
    управляет базой данных через административный интерфейс (в разработке)
 
 - **Арендатор**  
-   ищет свободные квартиры по дате  
+   ищет свободные квартиры по дате и ряду параметров
    отправляет запрос на бронирование  
    переходит в личный чат с владельцем для согласования оплаты
 
-- **Владелец** ( роль появится позднее)
-   будет возможность самостоятельно добавлять и редактировать свои карточки, управлять бронированием, смотреть аналитику.
+- **Собственник** 
+   самостоятельно вносит свои объекты
+   получает запросы на бронирование от Арендатора
+   через интерфейс бота управляет своими объектами и бронированиями
+   может инициировать личный чат с Арендатором
 
 ---
 
@@ -45,12 +48,10 @@ Telegram-бот для посуточной аренды жилья в Сочи.
 git clone https://github.com/yourusername/EasySochi_bot.git
 cd EasySochi_bot
 ```
-2. Создайте директорию secrets и добавьте в нее файлы
+2. Создайте директорию secrets и добавьте в нее файлы доступа в БД и сервисам (бот_токен, MapBox_token)
 ```
 mkdir -p secrets
-echo "your_db_user" > secrets/postgres_user.txt
-echo "your_db_pass" > secrets/postgres_password.txt
-echo "your_db_name" > secrets/postgres_db.txt
+
 ```
 3. Запустите приложение
 
@@ -62,56 +63,35 @@ docker compose up -d --build
 
 
 EasySochi_bot/
-│
 ├── Dockerfile
 ├── README.md
-├── alembic
-│   ├── README
-│   ├── env.py
-│   ├── script.py.mako
-│   └── versions
-├── alembic.ini
-├── api
-│   ├── main.py
-│   └── routes
 ├── bot
 │   ├── Dockerfile
+│   ├── alembic
+│   ├── alembic.ini
+│   ├── api
+│   ├── db
 │   ├── entrypoint.sh
 │   ├── handlers
 │   ├── main.py
+│   ├── requirements.txt
+│   ├── schemas
 │   └── utils
-├── db
-│   ├── __init.py__
-│   ├── db.py
-│   ├── db_async.py
-│   └── models
 ├── docker-compose.yml
 ├── init-pg.sql
 ├── postgresql.conf
-├── requirements.txt
 ├── reset_db.py
-├── schemas
-│   ├── __init.py__
-│   └── apartment_types.py
 ├── secrets
 │   ├── bot_token.txt
+│   ├── mapbox_token.txt
 │   ├── postgres_db.txt
 │   ├── postgres_password.txt
 │   └── postgres_user.txt
-├── test_connection.py
-├── test_geocode.py
-├── utils
-│   └── geocoding.py
 └── venv
-    ├── bin
-    ├── include
-    ├── lib
-    ├── lib64 -> lib
-    └── pyvenv.cfg
 
 
 ## Безопасность
- * Конфиденциальные данные (пользователи БД, токены) хранятся через Docker secrets или .env
+ * Конфиденциальные данные (пользователи БД, токены) хранятся через Docker secrets
  * Доступ в Telegram бот регулируется ролями
  * В будущем планируется интеграция с платежной системой с соблюдением PCI-DSS рекомендаций
 
@@ -119,6 +99,5 @@ EasySochi_bot/
 
  * Веб-интерфейс админа (на FastAPI + React)
  * Интеграция с платежной системой (ЮKassa / Stripe) 
- * Роль Владелец с правами создавать и редактировать карточки услуг
  * Создание экосистемы бронирований услуг, квартир, экскурсий в Сочи
  * Вывод аналитики в веб-интерфейс, с доступом по ролям

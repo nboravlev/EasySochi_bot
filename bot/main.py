@@ -32,7 +32,7 @@ async def post_init(application: Application) -> None:
         BotCommand("start", "🚀 Перезапустить бот"),
         BotCommand("help", "🚨 Помощь"),
         BotCommand("cancel", "⛔ Отменить действие"),
-        BotCommand('exit_chat', "☎️ Прервать чат с пользователем")
+        BotCommand('exit_chat', "⏸️ Выйти из диалога с пользователем")
     ]
     await application.bot.set_my_commands(commands)
 

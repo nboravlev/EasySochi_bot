@@ -7,6 +7,8 @@ secrets:
     file: ./secrets/postgres_db.txt
   bot_token:
     file: ./secrets/bot_token.txt
+  mapbox_token:
+    file: ./secrets/mapbox_token.txt
 
 services:
   db:
@@ -50,6 +52,7 @@ services:
       PYTHONPATH: /bot
     volumes:
         - ./bot:/bot
+
     depends_on:
       db:
         condition: service_healthy
@@ -60,7 +63,9 @@ services:
       - postgres_password
       - postgres_db
       - bot_token
+      - mapbox_token
     entrypoint: ["/bot/entrypoint.sh"]
+    command: ["bot"]
 
 volumes:
   postgres_data:

@@ -1,11 +1,8 @@
 from sqlalchemy.ext.asyncio import create_async_engine
-from dotenv import load_dotenv
 import os
 import asyncio
 from sqlalchemy import text
 
-# Загружаем переменные окружения
-load_dotenv(override=True)
 
 DATABASE_URL = os.getenv("DATABASE_URL_ASYNC")
 if not DATABASE_URL:
