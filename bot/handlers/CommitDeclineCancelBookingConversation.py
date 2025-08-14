@@ -62,12 +62,6 @@ async def booking_decline_reason(update: Update, context: ContextTypes.DEFAULT_T
     status_id = context.user_data.get("status_id")
 
     async with get_async_session() as session:
-        # Обновляем статус и причину
-        await session.execute(
-            sa_update(Booking)
-            .where(Booking.id == booking_id)
-            .values(status_id=status_id, decline_reason=reason)
-        )
 
         # Загружаем бронь с зависимостями
         result = await session.execute(
@@ -80,8 +74,25 @@ async def booking_decline_reason(update: Update, context: ContextTypes.DEFAULT_T
             )
             .where(Booking.id == booking_id)
         )
-        booking = result.scalar_one()
+        booking = result.scalar_one_or_none()
+        print(f"DEBUG_cancel: booking_id = {booking.id}, status = {booking.booking_type.name}, status_id = {booking.status_id}")
+        if not booking:
+            await update.message.reply_text("❌ Бронирование не найдено.", reply_markup=ReplyKeyboardRemove())
+            return ConversationHandler.END
 
+        # Запрещённые статусы
+        forbidden_statuses = [8, 9, 10, 11, 12]
+        if booking.status_id in forbidden_statuses:
+            await update.message.reply_text(
+                f"⛔ Нельзя отменить бронирование в статусе <b>{booking.booking_type.name}</b>.",
+                reply_markup=ReplyKeyboardRemove()
+            )
+            return ConversationHandler.END
+          # Обновляем статус и причину
+        await session.execute(
+            sa_update(Booking)
+            .where(Booking.id == booking_id)
+            .values(status_id=status_id, decline_reason=reason))
         await session.commit()
 
     # Определяем инициатора
@@ -94,7 +105,7 @@ async def booking_decline_reason(update: Update, context: ContextTypes.DEFAULT_T
         await context.bot.send_message(
             chat_id=owner_tg_id,
             text=(
-                f"❌ Гость отменил бронирование. №{booking.id} ({booking.booking_type.name}).\n"
+                f"❌ Гость отменил бронирование. №{booking.id}\n"
                 f"Адрес: {booking.apartment.short_address}\n"
                 f"C: {booking.check_in} по: {booking.check_out}\n"
                 f"Причина: {reason}"
@@ -106,7 +117,7 @@ async def booking_decline_reason(update: Update, context: ContextTypes.DEFAULT_T
         await context.bot.send_message(
             chat_id=guest_tg_id,
             text=(
-                f"❌ Ваше бронирование №{booking.id} ({booking.booking_type.name}).\n"
+                f"❌ Ваше бронирование №{booking.id} отменено собственником.\n"
                 f"Адрес: {booking.apartment.short_address}\n"
                 f"C: {booking.check_in} по: {booking.check_out}\n"
                 f"Причина: {reason}\n\n"
@@ -125,6 +136,8 @@ async def booking_decline_reason(update: Update, context: ContextTypes.DEFAULT_T
 
 
 # ✅ Only one function: booking confirmation
+BOOKING_STATUS_PENDING = 5
+BOOKING_STATUS_CONFIRMED = 6
 async def booking_confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle booking confirmation by owner"""
     query = update.callback_query
@@ -141,18 +154,29 @@ async def booking_confirm_callback(update: Update, context: ContextTypes.DEFAULT
             select(Booking)
             .options(
                 selectinload(Booking.user),
-                selectinload(Booking.apartment).selectinload(Apartment.owner)
+                selectinload(Booking.apartment).selectinload(Apartment.owner),
+                selectinload(Booking.booking_type)
             )
-            .where(Booking.id == booking_id)
+            .where(
+                Booking.id == booking_id,
+                Booking.is_active.is_(True)
+            )
         )
         booking = result.scalar_one_or_none()
         
         if not booking:
             await query.message.reply_text("❌ Бронирование не найдено.")
             return ConversationHandler.END
+        if booking.status_id != BOOKING_STATUS_PENDING:
+            await query.message.reply_text(
+                f"Бронирование в статусе <b>{booking.booking_type.name}</b> "
+                f"нельзя подтвердить. Обратитесь к администратору.",
+                parse_mode="HTML"
+            )
+            return ConversationHandler.END
 
         # ✅ Change status to Confirmed (id=6)
-        booking.status_id = 6
+        booking.status_id = BOOKING_STATUS_CONFIRMED
         booking.updated_at = datetime.utcnow()
         await session.commit()
 

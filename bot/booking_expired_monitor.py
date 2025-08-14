@@ -66,7 +66,7 @@ async def notify_timeout(bot, booking):
     owner_text = (
         f"⏰ Запрос на бронирование объекта <b>{booking.apartment.short_address}</b>,\n"
         f"Созданный и направленный вам для подтверждения: {created_str},\n"
-        f"Стоимостью {booking.total_price} руб.<b>‼️отменен‼️</b>\n"
+        f"Стоимостью {booking.total_price} р.<b>‼️отменен‼️</b>\n"
         f"⌛️ Истек срок 24 часа на подтверждение"
     )
 
