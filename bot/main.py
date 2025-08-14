@@ -8,7 +8,7 @@ from handlers.CommitDeclineCancelBookingHandler import conv_commit_decline_cance
 from handlers.BookingChatHandler import booking_chat
 
 from db_monitor import check_db
-import asyncio
+from booking_expired_monitor import check_expired_booking
 import os
 from pathlib import Path
 
@@ -39,7 +39,17 @@ async def post_init(application: Application) -> None:
     ]
     await application.bot.set_my_commands(commands)
 
-    asyncio.create_task(check_db(application.bot))
+        # Запуск периодических задач
+    application.job_queue.run_repeating(
+        check_expired_booking,
+        interval=60 * 60,
+        first=5
+    )
+    application.job_queue.run_repeating(
+        check_db,
+        interval=30 * 60,
+        first=10
+    )
 
 
 def main():
