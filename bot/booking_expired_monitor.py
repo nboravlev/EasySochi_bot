@@ -1,22 +1,23 @@
-import logging
+
 from datetime import timedelta
-from sqlalchemy import select, func
+from sqlalchemy import select, func, and_
 from sqlalchemy.orm import selectinload
 from db.db_async import get_async_session
 from db.models.bookings import Booking
 from db.models.apartments import Apartment
 from db.models.users import User
 
-logger = logging.getLogger(__name__)
+from utils.logging_config import log_function_call, LogExecutionTime, get_logger
 
 # Константы
 TARGET_BOOKING_STATUS = 5      # "ожидает подтверждения"
 BOOKING_STATUS_TIMEOUT = 11    # "время истекло"
 
 
-
+@log_function_call(action="check_expired_booking")
 async def check_expired_booking(context):
     """Проверка и обработка просроченных броней"""
+    logger = get_logger(__name__)
     bot = context.bot
 
     try:
@@ -29,14 +30,24 @@ async def check_expired_booking(context):
                     selectinload(Booking.user)
                 )
                 .where(
+                    and_(
                     Booking.status_id == TARGET_BOOKING_STATUS,
                     func.now() - Booking.created_at > timedelta(hours=24),
                     Booking.is_active == True
+                    )
                 )
             )
 
             result = await session.execute(stmt)
             expired_bookings = result.scalars().all()
+
+            logger.info(
+                f"Found {len(expired_bookings)} expired bookings to process",
+                extra={
+                    "action": "check_expired_booking",
+                    "booking_ids": [b.id for b in expired_bookings]
+                }
+            )
 
             for booking in expired_bookings:
                 booking.status_id = BOOKING_STATUS_TIMEOUT
@@ -49,6 +60,7 @@ async def check_expired_booking(context):
 
 async def notify_timeout(bot, booking):
     """Отправка уведомлений о том, что бронь истекла"""
+    logger = get_logger(__name__)
     guest_chat_id = booking.user.tg_user_id
     owner_chat_id = booking.apartment.owner.tg_user_id
     created_local = (booking.created_at + timedelta(hours=3)).replace(second=0, microsecond=0)
@@ -72,3 +84,14 @@ async def notify_timeout(bot, booking):
 
     await bot.send_message(chat_id=guest_chat_id, text=guest_text, parse_mode="HTML")
     await bot.send_message(chat_id=owner_chat_id, text=owner_text, parse_mode="HTML")
+
+
+    logger.info(
+        f"Timeout notifications sent for booking {booking.id}",
+        extra={
+            "action": "notify_timeout",
+            "booking_id": booking.id,
+            "guest_chat_id": guest_chat_id,
+            "owner_chat_id": owner_chat_id
+        }
+    )

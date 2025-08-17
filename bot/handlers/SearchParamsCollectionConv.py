@@ -107,8 +107,8 @@ async def calendar_callback(update: Update, context: CallbackContext):
         # ✅ Проверяем, выбрал ли пользователь check-in
         if check_in is None:
             # 🚫 Нельзя выбрать дату заезда в прошлом
-            if selected_date < today:
-                await query.answer("🚫 Нельзя выбрать прошедшую дату", show_alert=True)
+            if selected_date <= today:
+                await query.answer("🚫 Бронирование начиная с завтра", show_alert=True)
                 return SELECTING_CHECKIN
 
             # ✅ Сохраняем дату заезда

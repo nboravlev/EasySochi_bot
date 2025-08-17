@@ -8,8 +8,8 @@ booking_chat = ConversationHandler(
     states={
         BOOKING_CHAT: [
             MessageHandler(filters.TEXT & ~filters.COMMAND, booking_chat_message),
-            CommandHandler("exit_chat", exit_booking_chat)
+            CommandHandler("cancel", exit_booking_chat)
         ]
     },
-    fallbacks=[CommandHandler("exit_chat", exit_booking_chat)],
+    fallbacks=[CommandHandler("cancel", exit_booking_chat)],
 )

@@ -1,4 +1,11 @@
-from telegram import ReplyKeyboardMarkup, KeyboardButton, Update, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import (
+    ReplyKeyboardMarkup, 
+    KeyboardButton, 
+    Update, 
+    ReplyKeyboardRemove, 
+    InlineKeyboardButton, 
+    InlineKeyboardMarkup
+    )
 from telegram.ext import (
     ContextTypes, 
     ConversationHandler, 
@@ -7,6 +14,7 @@ from telegram.ext import (
     filters, 
     CallbackQueryHandler
 )
+
 from sqlalchemy import update as sa_update, select 
 from geoalchemy2.shape import from_shape
 from shapely.geometry import Point
@@ -29,6 +37,8 @@ from utils.owner_objects_request_from_menu import prepare_owner_objects_cards
 from utils.renter_bookings_request_from_menu import prepare_renter_bookings_cards
 from utils.owner_orders_request_from_menu import prepare_owner_orders_cards
 
+from utils.logging_config import log_function_call, LogExecutionTime, get_logger
+
 from dotenv import load_dotenv
 import os
 
@@ -40,10 +50,8 @@ logger = logging.getLogger(__name__)
  ASK_LOCATION,
  VIEW_BOOKINGS,
  VIEW_OBJECTS,
- VIEW_ORDERS,
- REPORT_PROBLEM,
- SHOW_HELP
-)= range(8)
+ VIEW_ORDERS
+)= range(6)
 
 # === Роли ===
 ROLE_MAP = {
@@ -54,14 +62,12 @@ ROLE_MAP = {
 # === Дополнительные действия ===
 EXTRA_ACTIONS = {
     "📑 мои бронирования": VIEW_BOOKINGS,
-    "🏢 мои объекты": VIEW_OBJECTS,
-    "⚠️ Сообщить о проблеме": REPORT_PROBLEM,
-    "ℹ️ Информация": SHOW_HELP
+    "🏢 мои объекты": VIEW_OBJECTS
 }
 
 WELCOME_TEXT = (
-"Здравствуйте, \n Я Николай Боравлев, программист и спортсмен из КП. Автоматизирую процессы с 2023 г.\n\n"
-"EasySochi это локальный бот для сдачи в аренду и поиску недвижимости в Сочи, коммуникации пользователей и управления своими бронированиями и квартирами.\n"
+"Здравствуйте, \n Я Николай Боравлев, программист и спортсмен из Сочи. Автоматизирую процессы с 2023 г.\n\n"
+"EasySochi это мой продукт для сдачи в аренду и поиску недвижимости в Сочи, коммуникации пользователей и управления своими бронированиями и квартирами.\n"
 "Моя цель - создать альтернативу дорогим агрегаторам, и за счет минимальной комиссии за пользование инструментом предложить пользователям конкурентную цену.\n"
 "В широком смысле, это настраиваемый масштабируемый продукт для управления бизнесом в сфере услуг, аренды, проката и т.п. По вопросам разработки и внедрения для Вашего бизнеса напишите мне в раздел Помощь"
 
@@ -75,8 +81,32 @@ WELCOME_PHOTO_URL = "AgACAgIAAxkBAAInXWiZ1L3ZKAPDkD46a2eTg3lETNBQAALY-TEb3UDQSMU
 def chunk_buttons(buttons, n=2):
     return [buttons[i:i+n] for i in range(0, len(buttons), n)]
 # === Старт ===
+@log_function_call(action="user_start_command")
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Get logger with user context
+    user_id = update.effective_user.id if update.effective_user else None
+    chat_id = update.effective_chat.id if update.effective_chat else None
+    logger = get_logger(__name__, user_id=user_id, chat_id=chat_id)
     try:
+        with LogExecutionTime("user_registration", logger, user_id, chat_id):
+            if update.message:
+                user_choice = update.message.text
+            elif update.callback_query:
+                user_choice = update.callback_query.data
+            else:
+                logger.warning("choose_role: ни message, ни callback_query нет в update")
+                return ConversationHandler.END
+            
+            # Enhanced logging with context
+            logger.info(
+                f"User started bot and chose role: {user_choice}",
+                extra={
+                    'action': 'role_selection',
+                    'user_choice': user_choice,
+                    'user_id': user_id,
+                    'chat_id': chat_id
+                }
+            )
         # Формируем список всех кнопок
         all_buttons = list(ROLE_MAP.keys()) + list(EXTRA_ACTIONS.keys())
         
@@ -105,12 +135,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         return CHOOSING_ROLE
     except Exception as e:
-        logger.error(f"Error in start handler: {e}")
-        await update.message.reply_text("Произошла ошибка. Попробуйте позже.")
+        logger.error(
+        f"Error in start handler: {str(e)}",
+        extra={
+            'action': 'start_error',
+            'user_id': user_id,
+            'chat_id': chat_id,
+            'error_type': type(e).__name__
+        },
+        exc_info=True
+        )
         return ConversationHandler.END
 
 # === Выбор роли и регистрация ===
 async def choose_role(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Get logger with user context
+    user_id = update.effective_user.id if update.effective_user else None
+    chat_id = update.effective_chat.id if update.effective_chat else None
+    logger = get_logger(__name__, user_id=user_id, chat_id=chat_id)
     try:
         user_choice = update.message.text
         if user_choice in EXTRA_ACTIONS:
@@ -121,29 +163,11 @@ async def choose_role(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif next_state == VIEW_OBJECTS:
                 await select_owner_objects(update, context)
                 return VIEW_OBJECTS
-            elif next_state == REPORT_PROBLEM:
-                await update.message.reply_text("⚠️ Опишите проблему, и я передам сообщение администратору.")
-                return REPORT_PROBLEM
-            elif next_state == SHOW_HELP:
-                keyboard = [
-                    [InlineKeyboardButton("📆 Инструкция по бронированию", callback_data="help_booking")],
-                    [InlineKeyboardButton("🏠 Инструкция по добавлению объекта", callback_data="help_object")]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-
-                await update.message.reply_text(
-                    "ℹ️ Выберите раздел, по которому нужна помощь:",
-                    reply_markup=reply_markup
-                )
-                return SHOW_HELP
-
-
         
         if user_choice in ROLE_MAP:
             role_id = ROLE_MAP[user_choice]
             tg_user = update.effective_user
             bot_id = context.bot.id
-            print(f"результат запроса в ТГ{tg_user}")
             logger.info(f"User {tg_user.id} chose role: {role_id}")
 
             user, session, is_new_user = await register_user_and_session(tg_user, bot_id, role_id)      
@@ -166,7 +190,7 @@ async def choose_role(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup=ReplyKeyboardRemove()
                 )
                 keyboard = [
-                    [KeyboardButton("📞 Отправить телефон", request_contact=True)], 
+                    [KeyboardButton("📞 Нажмите здесь, чтобы отправить", request_contact=True)], 
                     ["Пропустить"]
                 ]
                 await update.message.reply_text(
@@ -237,7 +261,9 @@ async def save_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         is_new_user = context.user_data["is_new_user"]
         session_id = context.user_data["session_id"]
-        
+                # Логируем полностью всё сообщение для диагностики
+        print("DEBUG_UPDATE:", update)
+        print("DEBUG_MESSAGE:", update.message)
         location_saved = False
         
         if update.message.location:
@@ -259,7 +285,8 @@ async def save_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=ReplyKeyboardRemove()
             )
             location_saved = True
-            
+
+                   
         elif update.message.text == "Не отправлять":
             await update.message.reply_text(
                 "Хорошо, геолокация не сохранена.",
@@ -273,7 +300,7 @@ async def save_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if is_new_user:
             await update.message.reply_text("🎉 Регистрация завершена успешно!")
         else:
-            await update.message.reply_text("👋 Рады видеть вас снова!")
+            await update.message.reply_text(f"👋 Рады видеть вас снова!")
         
         return await _handle_redirect(update, context)
         
@@ -288,7 +315,7 @@ async def save_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def _ask_for_location(update):
     """Вспомогательная функция для запроса геолокации"""
     keyboard = [
-        [KeyboardButton("📍 Отправить геолокацию", request_location=True)], 
+        [KeyboardButton("📍 Нажмите, чтобы поделиться", request_location=True)], 
         ["Не отправлять"]
     ]
     await update.message.reply_text(
@@ -297,9 +324,7 @@ async def _ask_for_location(update):
     )
     return ASK_LOCATION
 
-from telegram import ReplyKeyboardMarkup, KeyboardButton
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 async def _handle_redirect(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -330,76 +355,6 @@ async def _handle_redirect(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     
-#==== Обработка проблемы ===
-
-async def handle_problem(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")
-    if not ADMIN_CHAT_ID:
-        raise ValueError("ADMIN_CHAT_ID is not set in .env")
-    try:
-        user = update.effective_user
-        problem_text = update.message.text.strip() if update.message else ""
-        print(f"DEBUG repory_problem sender_id {user.first_name}")
-        # ✅ Формируем сообщение для админов
-        if problem_text.lower() in ("/help", "help"):
-            await update.message.reply_text(
-                "⚠️ Опишите ситуацию, и я передам сообщение администратору."
-            )
-            # Переходим в состояние REPORT_PROBLEM
-            return REPORT_PROBLEM
-        else:
-            admin_message = (
-                f"🚨 *Сообщение о проблеме*\n\n"
-                f"👤 Пользователь: [{user.first_name}](tg://user?id={user.id})\n"
-                f"🆔 TG ID: `{user.id}`\n\n"
-                f"📝 Проблема:\n{problem_text}"
-            )
-
-        # ✅ Отправляем сообщение в админский чат
-        await context.bot.send_message(
-            chat_id=ADMIN_CHAT_ID,
-            text=admin_message,
-            parse_mode="Markdown"
-        )
-
-        # ✅ Отправляем подтверждение пользователю
-        await update.message.reply_text(
-            "✅ Спасибо! Ваше сообщение передано администратору.\n"
-            "Если потребуется, мы свяжемся с вами."
-        )
-
-        # ✅ Показываем клавиатуру главного меню
-        all_buttons = list(ROLE_MAP.keys()) + list(EXTRA_ACTIONS.keys())
-        
-        # Группируем по две в ряд
-        keyboard = chunk_buttons(all_buttons, n=2)
-        
-        reply_markup = ReplyKeyboardMarkup(
-            keyboard,
-            one_time_keyboard=True,
-            resize_keyboard=True
-        )
-
-        if update.message:
-            await update.message.reply_text(
-                "Выберите действие:",
-                reply_markup=reply_markup
-            )
-        elif update.callback_query:
-            await update.callback_query.answer()
-            await update.callback_query.message.reply_text(
-                "Выберите действие:",
-                reply_markup=reply_markup
-            )
-
-        return CHOOSING_ROLE
-
-    except Exception as e:
-        logger.error(f"Error in handle_problem: {e}")
-        await update.message.reply_text("Произошла ошибка при отправке сообщения. Попробуйте позже.")
-        return CHOOSING_ROLE
-
 #==== Показ объектов лендлорду ===
 async def select_owner_objects (update: Update, context: ContextTypes.DEFAULT_TYPE):
     tg_user_id = update.effective_user.id
@@ -509,6 +464,8 @@ async def select_owner_orders(update: Update, context: ContextTypes.DEFAULT_TYPE
                 selectinload(Booking.booking_type)
             )
             .where(Booking.apartment_id == apartment_id)
+            .order_by(Booking.status_id.asc(),
+                      Booking.total_price.desc())
         )
         result = await session.execute(stmt)
         owner_booking_full = result.scalars().all()
@@ -588,8 +545,8 @@ async def select_renter_bookings (update: Update, context: ContextTypes.DEFAULT_
         )
         renter = result_renter.scalar_one_or_none()
         if not renter:
-            await update.message.reply_text("❌ Возникла проблема. Свяжитесь с администратором.")
-            return REPORT_PROBLEM
+            await update.message.reply_text("❌ Возникла проблема. Свяжитесь с администратором /help")
+
 
         # Получаем активные бронирования Арендатора
         stmt = (
@@ -668,56 +625,6 @@ async def show_renter_bookings(update: Update, context: ContextTypes.DEFAULT_TYP
     return VIEW_BOOKINGS   
 
 
-async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()  # обязательный ответ на callback
-
-    data = query.data
-
-    buttons = [[InlineKeyboardButton("🔙 Вернуться в меню", callback_data="back_menu")]]
-    markup = InlineKeyboardMarkup(buttons)
-
-    if data == "help_booking":
-        await query.message.reply_text(
-            "📆 *Инструкция по бронированию:*\n\n"
-            "1. Перейдите в раздел 'Хочу снять жильё';\n"
-            "2. Следуйте подсказкам робота;\n"
-            "3. Найдите подходящий объект через поиск;\n"
-            "4. Нажмите 'Забронировать';\n"
-            "5. Дождитесь подтверждения от владельца;\n"
-            "6. Общайтесь с ним в чате по бронированию;\n"
-            "7. Запросите в чате инструкции по оплате и заселению;\n"
-            "8. Все заявки сохраняются в разделе 'Просмотреть мои бронирования';\n"
-            "9. Из своей заявки можно вернуться в чат с владельцем для уточнений;\n"
-            "10. Если возниктут неразрешимые затруднения, напишите в раздел 'Сообщить о проблеме'.",
-            parse_mode="Markdown",
-            reply_markup=markup
-        )
-    elif data == "help_object":
-        await query.message.reply_text(
-            "🏠 *Инструкция по добавлению объекта:*\n\n"
-            "1. Перейдите в раздел 'Хочу сдавать жильё';\n"
-            "2. Следуйте подсказкам робота;\n"
-            "3. Заполните информацию: название, описание, фото и т.д.;\n"
-            "4. При вводе адреса достаточно указать город, улицу и номер дома и выбрать из предложенных роботом вариатов;\n"
-            "5. В поиске пользователю демонстрируется только первое загруженное фото;\n"
-            "6. Далее нажмите 'Подтвердить', если все хорошо;\n"
-            "7. Нажмите 'Ввести заново', чтобы удалить и ввести заново;\n"
-            "8. После создания бронирования вы получите уведомление;\n"
-            "9. В теч. суток нужно подтвердить или отклонить с указанием причины;\n"
-            "10. После вашего подтверждения у пользователя появится доступ в чат с вами;\n"
-            "11. В боте пока нет встроенной функции оплаты, поэтому о способах оплаты вы информируете гостя в этом чате;\n"
-            "12. В разделе 'Просмотреть мои объекты' вы сможет просматривать добавленные с текущего аккаунта ТГ объекты;\n"
-            "13. Отредактировать пока не получится, только удалить и создать заново;\n"
-            "14. Если на объекте есть активные бронирования, то по вопросам редактирования напишите в раздел 'Сообщить о проблеме';\n"
-            "15. Чтобы убрать из поиска свой объект на конкретные даты, самостоятельно создайте бронирования на эти даты с подтверждением;\n"
-            "16. 25 числа каждого месяца вы получите уведомление о сумме завершенных бронирований по 24 включительно, размере комиссии и инструкцию по оплате."
-,
-            parse_mode="Markdown",
-            reply_markup=markup
-        )
-
-    
 
 # === Вспомогательная функция ===
 
@@ -750,10 +657,9 @@ async def delete_apartment(apartment_id: int, tg_user_id: int, update: Update, c
         if has_active:
             await update.callback_query.message.reply_text(
                 "🚫 На данном объекте есть активные бронирования. "
-                "Сообщите администратору о вашей проблеме."
-                "Просто напишите сообщение и нажмите Отправить, с вами свяжутся"
+                "Сообщите администратору о вашей проблеме. /help"
             )
-            return REPORT_PROBLEM
+            return 
 
         # Обновление полей
         await session.execute(

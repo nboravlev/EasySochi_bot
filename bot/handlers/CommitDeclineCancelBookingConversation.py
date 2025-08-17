@@ -89,10 +89,8 @@ async def booking_decline_reason(update: Update, context: ContextTypes.DEFAULT_T
             )
             return ConversationHandler.END
           # Обновляем статус и причину
-        await session.execute(
-            sa_update(Booking)
-            .where(Booking.id == booking_id)
-            .values(status_id=status_id, decline_reason=reason))
+        booking.status_id = status_id
+        booking.decline_reason = reason
         await session.commit()
 
     # Определяем инициатора

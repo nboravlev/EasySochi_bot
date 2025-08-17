@@ -20,8 +20,8 @@ def prepare_owner_objects_cards(current_apartment: Apartment, current_index: int
             pending += 1
             pending_fund += b.total_price or 0
         elif b.status_id == 12:  # завершено
-            complite += 1
-            complite_fund += b.total_price or 0
+            complit += 1
+            complit_fund += b.total_price or 0
     books = confirmed + pending
 
     text = (
