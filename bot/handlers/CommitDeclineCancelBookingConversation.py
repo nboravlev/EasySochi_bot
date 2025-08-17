@@ -85,7 +85,8 @@ async def booking_decline_reason(update: Update, context: ContextTypes.DEFAULT_T
         if booking.status_id in forbidden_statuses:
             await update.message.reply_text(
                 f"⛔ Нельзя отменить бронирование в статусе <b>{booking.booking_type.name}</b>.",
-                reply_markup=ReplyKeyboardRemove()
+                reply_markup=ReplyKeyboardRemove(),
+                parse_mode="HTML"
             )
             return ConversationHandler.END
           # Обновляем статус и причину

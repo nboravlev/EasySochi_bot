@@ -38,9 +38,7 @@ async def start_problem(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Не возвращаем ConversationHandler.END — просто выходим; флаг решает поведение
     return None
 
-#ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")
-
-ADMIN_CHAT_ID = -4682455939
+ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")
 
 @log_function_call(action="process_problem")
 async def process_problem(update: Update, context: ContextTypes.DEFAULT_TYPE):
