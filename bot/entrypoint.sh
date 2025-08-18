@@ -20,11 +20,6 @@ export MAPBOX_TOKEN=$(cat /run/secrets/mapbox_token)
 
 export DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}"
 
-echo "[entrypoint] Starting bot with following config:"
-echo "BOT_TOKEN=${BOT_TOKEN}"
-echo "MAPBOX_TOKEN=${MAPBOX_TOKEN}"
-echo "POSTGRES_USER=${POSTGRES_USER}"
-echo "POSTGRES_DB=${POSTGRES_DB}"
 
 
 

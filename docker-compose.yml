@@ -13,7 +13,7 @@ secrets:
 services:
   db:
     build:
-      context: .
+      context: ./db
       dockerfile: Dockerfile
     container_name: postgres_db
     restart: always
@@ -37,9 +37,14 @@ services:
       - postgres_db
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h localhost -p ${POSTGRES_PORT:-5432} -U $(cat /run/secrets/postgres_user) -d $(cat /run/secrets/postgres_db)"]
-      interval: 5s
+      interval: 25s
       timeout: 5s
-      retries: 10
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   bot:
     build:
@@ -49,10 +54,13 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      PYTHONPATH: /bot
+      - LOG_LEVEL=INFO
+      - LOG_DIR=/app/logs
+      - ENABLE_LOG_VIEWER=true
+      - PYTHONPATH=/bot
     volumes:
         - ./bot:/bot
-
+        - bot_logs:/app/logs  # Mount logs volume
     depends_on:
       db:
         condition: service_healthy
@@ -66,9 +74,37 @@ services:
       - mapbox_token
     entrypoint: ["/bot/entrypoint.sh"]
     command: ["bot"]
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  log-viewer:
+    build: 
+      context: ./log_viewer
+      dockerfile: Dockerfile
+    container_name: log_viewer
+    depends_on:
+      - bot
+    volumes:
+      - bot_logs:/app/logs:ro  # Read-only access to logs
+    ports:
+      - "8080:8080"
+    environment:
+      - LOG_DIR=/app/logs
+    networks:
+      - tg_app_net
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   postgres_data:
+  bot_logs:
 
 networks:
   tg_app_net:

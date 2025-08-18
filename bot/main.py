@@ -1,4 +1,3 @@
-from telegram.ext import ApplicationBuilder, JobQueue
 from handlers.RegistrationHandler import registration_conversation
 from handlers.AddObjectHandler import add_object_conv
 from handlers.ObjectCommitHandler import confirm_apartment_handler
@@ -43,7 +42,9 @@ from telegram.ext import (
     ContextTypes,
     MessageHandler,
     filters,
-    CallbackQueryHandler
+    CallbackQueryHandler,
+    ApplicationBuilder,
+    JobQueue
 )
 # Initialize comprehensive logging
 setup_logging(
