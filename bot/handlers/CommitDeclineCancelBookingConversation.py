@@ -208,7 +208,7 @@ async def booking_confirm_callback(update: Update, context: ContextTypes.DEFAULT
     # ✅ Update the original message (remove confirmation buttons)
     await query.edit_message_text(
         f"✅ Бронирование №{booking.id} подтверждено!\n"
-        f"Чат с гостем активирован."
+        f"Чат с гостем активирован.",reply_markup=ReplyKeyboardRemove()
     )
 
     return ConversationHandler.END

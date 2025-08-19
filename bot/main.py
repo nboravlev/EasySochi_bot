@@ -5,17 +5,13 @@ from handlers.ObjectRedoHandler import redo_apartment_handler
 from handlers.SearchParamsCollectionHandler import search_conv
 from handlers.CommitDeclineCancelBookingHandler import conv_commit_decline_cancel
 from handlers.BookingChatHandler import booking_chat
+from handlers.UserSendProblemHandler import problem_handler
+from handlers.AdminReplayUserProblemHandler import admin_replay_handler
 #from handlers.UnknownComandHandler import unknown_command_handler
-from handlers.GlobalCommands import (
-    start_problem,          # /help -> ставит флаг awaiting_problem
-    handle_global_text,     # глобальный перехватчик текста (обработка awaiting_problem)
-    help_command,           # /info -> показывает меню инфо/инструкций
-    help_callback_handler,   # callback query для help_* кнопок
-    cancel_command,
-    reply_callback,
-    handle_admin_reply
-)
+from handlers.GlobalCommands import cancel_command
 from handlers.BookingChatConversation import exit_booking_chat
+from handlers.ShowInfoHandler import info_callback_handler, info_command
+
 
 from db_monitor import check_db
 from booking_expired_monitor import check_expired_booking
@@ -62,7 +58,7 @@ async def post_init(application: Application) -> None:
         BotCommand("start", "🔄 Перезапустить бот"),
         BotCommand("help", "⚠️ Помощь"),
         BotCommand('info', "📌 Инструкция"),
-        BotCommand("cancel", "⛔ Отменить все")
+        BotCommand("cancel", "⛔ Отмена")
 
     ]
     await application.bot.set_my_commands(commands)
@@ -97,16 +93,13 @@ def main():
     app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
 
     #глобальные обработчики
-    app.add_handler(CommandHandler("help", start_problem), group=0)
-    app.add_handler(CommandHandler("info", help_command), group=0)
-    #app.add_handler(CommandHandler("cancel",cancel_command),group=0)
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_global_text), group=0)
+    app.add_handler(CommandHandler("info",info_command), group=0)
+    app.add_handler(problem_handler, group=0)
+    app.add_handler(admin_replay_handler,group=0)
 
     #админские обработки
-    app.add_handler(CallbackQueryHandler(reply_callback, pattern=r"^reply_\d+$"),group=1)
-    app.add_handler(MessageHandler(filters.REPLY & filters.TEXT, handle_admin_reply),group=1)
     app.add_handler(
-        CallbackQueryHandler(help_callback_handler, pattern=r"^help_"),
+        CallbackQueryHandler(info_callback_handler, pattern=r"^info_"),
         group=1
     )
     #app.add_handler(unknown_command_handler,group=0) #обработчик незнакомых команд

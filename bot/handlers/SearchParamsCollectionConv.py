@@ -267,12 +267,12 @@ async def handle_price_filter_type_selection(update: Update, context: ContextTyp
 
 # === Вспомогательная функция ===
 
-async def send_message(update: Update, text: str):
+async def send_message(update: Update, text: str,reply_markup=None):
     """Универсальная отправка сообщения (поддержка Message и CallbackQuery)."""
     if update.message:
-        await update.message.reply_text(text)
+        await update.message.reply_text(text,reply_markup=reply_markup)
     elif update.callback_query:
-        await update.callback_query.message.reply_text(text)
+        await update.callback_query.message.reply_text(text,reply_markup = reply_markup)
 
 
 async def filter_apartments(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -299,9 +299,13 @@ async def filter_apartments(update: Update, context: ContextTypes.DEFAULT_TYPE):
     apartment_ids, apartments, new_search = await get_apartments(check_in, check_out, session_id, user_id, filters)
 
     if not apartment_ids:
-        await send_message(update, "❌ По выбранным параметрам ничего не найдено.\nПопробуйте изменить фильтры или выбрать другие даты /start_search")
+        keyboard = [
+        [InlineKeyboardButton("🔍 Новый поиск", callback_data="start_search")]
+    ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await send_message(update, "❌ По выбранным параметрам ничего не найдено.\nПопробуйте изменить фильтры или выбрать другие даты",reply_markup=reply_markup)
 
-        return SELECTING_CHECKIN
+        return ConversationHandler.END
 
     # ✅ Сохраняем результаты в контексте
     context.user_data.update({
@@ -396,7 +400,7 @@ async def handle_guests_number(update: Update, context: ContextTypes.DEFAULT_TYP
         # Запрашиваем комментарий
         keyboard = [[KeyboardButton("направить комментарий")]]
         await update.message.reply_text(
-            "🕊 Вы можете направить собственнику доп.информацию (макс. 255 символов):",
+            "🕊 Вы можете направить собственнику доп.информацию:",
             reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
         )
         return BOOKING_COMMENT
@@ -526,5 +530,6 @@ async def show_filtered_apartments_navigation(update: Update, context: ContextTy
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Отмена поиска"""
     context.user_data.clear()
-    await update.message.reply_text("❌ Поиск отменён")
+    await update.message.reply_text("❌ Поиск отменён",reply_markup=ReplyKeyboardRemove())
+    context.user_data.clear()
     return ConversationHandler.END

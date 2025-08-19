@@ -41,21 +41,40 @@ async def check_expired_booking(context):
             result = await session.execute(stmt)
             expired_bookings = result.scalars().all()
 
-            logger.info(
-                f"Found {len(expired_bookings)} expired bookings to process",
-                extra={
-                    "action": "check_expired_booking",
-                    "booking_ids": [b.id for b in expired_bookings]
-                }
-            )
+            if not expired_bookings:
+                logger.info(
+                    f"No expired bookings found for status={TARGET_BOOKING_STATUS} "
+                    f"and timeout=24h",
+                    extra={"action": "check_expired_booking"}
+                )
+            else:
+                # Ограничиваем количество выводимых ID до 10, если их много
+                booking_ids = [b.id for b in expired_bookings[:10]]
+                if len(expired_bookings) > 10:
+                    booking_ids.append("...")
+                
+                logger.info(
+                    f"Found {len(expired_bookings)} expired bookings to process",
+                    extra={
+                        "action": "check_expired_booking",
+                        "booking_ids": booking_ids
+                    }
+                )
 
             for booking in expired_bookings:
                 booking.status_id = BOOKING_STATUS_TIMEOUT
                 await session.commit()
-                await notify_timeout(bot, booking)
+
+
+                                # Замер времени уведомлений
+                with LogExecutionTime("notify_timeout", logger, user_id=booking.user.id, chat_id=booking.apartment.owner.id):
+                    await notify_timeout(bot, booking)
 
     except Exception as e:
-        logger.exception(f"Ошибка при обработке просроченных броней: {e}")
+        logger.exception(
+            f"Ошибка при обработке просроченных броней: {e}",
+            extra={"action": "check_expired_booking"}
+        )
 
 
 async def notify_timeout(bot, booking):

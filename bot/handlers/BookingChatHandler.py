@@ -8,7 +8,9 @@ booking_chat = ConversationHandler(
     states={
         BOOKING_CHAT: [
             MessageHandler(filters.TEXT & ~filters.COMMAND, booking_chat_message),
-            CommandHandler("cancel", exit_booking_chat)
+            CommandHandler("cancel", exit_booking_chat),
+            CallbackQueryHandler(enter_booking_chat, pattern=r"^chat_booking_enter_\d+$"),
+            CallbackQueryHandler(open_booking_chat_from_menu, pattern=r"^chat_booking_\d+$")
         ]
     },
     fallbacks=[CommandHandler("cancel", exit_booking_chat)],

@@ -27,6 +27,8 @@ from utils.escape import safe_html
 from utils.anti_contact_filter import sanitize_message
 from utils.booking_chat_message_history import send_booking_chat_history
 
+from utils.logging_config import log_function_call, LogExecutionTime, get_logger
+
 from sqlalchemy import select, update as sa_update
 
 from sqlalchemy.orm import selectinload
@@ -38,18 +40,30 @@ from sqlalchemy.orm import selectinload
     BOOKING_CHAT
 ) = range(2)
 
-
+logger = get_logger(__name__)
 
 # ✅ 2. Обработчик кнопки Перейти в чат
+@log_function_call(action="booking_chat_from_menu")
 async def open_booking_chat_from_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    
+    logger = get_logger(__name__)
+    callback_data = query.data
     try:
         booking_id = int(query.data.split("_")[-1])
         context.user_data["chat_booking_id"] = booking_id
-    except (ValueError, IndexError):
+        context.user_data["callback_data"] = callback_data
+    except (ValueError, IndexError) as e:
+        logger.error(
+            "Failed to parse booking_id from callback",
+            extra={
+                "action": "open_booking_chat",
+                "status": "error",
+                "callback_data": callback_data,
+                "error": str(e),
+            }
+        )
         await query.message.reply_text("Ошибка: не найден ID бронирования")
         return ConversationHandler.END
 
@@ -57,12 +71,16 @@ async def open_booking_chat_from_menu(update: Update, context: ContextTypes.DEFA
     await query.edit_message_reply_markup(reply_markup=None)
 
     await send_booking_chat_history(booking_id, update)
+
+    #делаем отметку, что историю ему уже показана
+    shown_key = f"history_shown_{booking_id}"
+    context.user_data[shown_key] = True
     
     # Отправляем приглашение в чат
     await query.message.reply_text(
         f"💬 Вы вошли в чат бронирования №{booking_id}.\n"
         "Отправьте свое сообщение.\n\n"
-        "Для выхода используйте /exit_chat"
+        "Для выхода используйте команду /cancel"
     )
     
     return BOOKING_CHAT
@@ -112,6 +130,22 @@ async def booking_chat_message(update: Update, context: ContextTypes.DEFAULT_TYP
             await update.message.reply_text("❌ Владелец не найден.")
             return ConversationHandler.END
 
+        callback_data = context.user_data.get("callback_data")
+        logger.info(
+        "Booking chat opened",
+        extra={
+            "action": "open_booking_chat",
+            "status": "success",
+            "callback_data": callback_data,
+            "booking_id": booking_id,
+            "initiator_tg_user_id": user_tg_id,
+            "renter_id": renter.id if renter else None,
+            "renter_tg_user_id": renter.tg_user_id if renter else None,
+            "owner_id": owner.id if owner else None,
+            "owner_tg_user_id": owner.tg_user_id if owner else None,
+        }
+    )
+
         # 3. Определяем роль отправителя
         if user_tg_id == renter.tg_user_id:
             sender_id = renter.id
@@ -152,24 +186,39 @@ async def booking_chat_message(update: Update, context: ContextTypes.DEFAULT_TYP
 async def enter_booking_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
+    logger.info(f"ENTER_BOOKING_CHAT: Callback received: '{query.data}'")
     # Извлекаем ID бронирования из callback_data
-    booking_id = int(query.data.split("_")[-1])
+    try:
+        # Извлекаем ID бронирования из callback_data
+        booking_id = int(query.data.split("_")[-1])
+        logger.info(f"ENTER_BOOKING_CHAT: Extracted booking_id: {booking_id}")
+        
+        # Сохраняем в user_data
+        context.user_data["chat_booking_id"] = booking_id
+        # Проверяем, показывали ли историю именно для этого booking_id
+        shown_key = f"history_shown_{booking_id}"
+        if not context.user_data.get(shown_key):
+            await send_booking_chat_history(booking_id, update)
+            context.user_data[shown_key] = True
+        # Отправляем подтверждение
+        await query.edit_message_text(
+            f"💬 Вы вошли в чат бронирования №{booking_id}\n"
+            "Отправьте ваше сообщение..."
+        )
+        
+        logger.info(f"ENTER_BOOKING_CHAT: Successfully entered chat for booking {booking_id}")
+        return BOOKING_CHAT
+        
+    except Exception as e:
+        logger.error(f"ENTER_BOOKING_CHAT: Error processing callback: {e}")
+        await query.edit_message_text("❌ Ошибка при входе в чат")
+        return ConversationHandler.END
     
-    # Сохраняем в user_data
-    context.user_data["chat_booking_id"] = booking_id
-    
-    # Отправляем подтверждение
-    await query.edit_message_text(
-        f"💬 Вы вошли в чат бронирования №{booking_id}\n"
-        "Отправьте ваше сообщение..."
-    )
-    
-    return BOOKING_CHAT
-
 async def exit_booking_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if "chat_booking_id" in context.user_data:
         del context.user_data["chat_booking_id"]
-    
-    await update.message.reply_text("Вы вышли из чата бронирования")
+    else:
+        context.user_data.clear()
+
+    await update.message.reply_text("Вы вышли из чата бронирования",reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END

@@ -48,6 +48,10 @@ class JSONFormatter(logging.Formatter):
             log_entry['execution_time'] = record.execution_time
         if hasattr(record, 'request_id'):
             log_entry['request_id'] = record.request_id
+        if hasattr(record, 'booking_ids'):
+            log_entry['booking_ids'] = record.booking_ids
+        if hasattr(record, 'callback_data'):
+            log_entry['callback_data'] = record.callback_data
             
         return json.dumps(log_entry, ensure_ascii=False)
 

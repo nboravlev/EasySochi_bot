@@ -19,7 +19,6 @@ from sqlalchemy import update as sa_update, select
 from geoalchemy2.shape import from_shape
 from shapely.geometry import Point
 from datetime import datetime
-import logging
 from sqlalchemy.orm import selectinload
 
 from db.db_async import get_async_session
@@ -42,7 +41,7 @@ from utils.logging_config import log_function_call, LogExecutionTime, get_logger
 from dotenv import load_dotenv
 import os
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # === Состояния ===
 (CHOOSING_ROLE, 
@@ -67,7 +66,7 @@ EXTRA_ACTIONS = {
 
 WELCOME_TEXT = (
 "Здравствуйте, \n Я Николай Боравлев, программист и спортсмен из Сочи. Автоматизирую процессы с 2023 г.\n\n"
-"EasySochi это мой продукт для сдачи в аренду и поиску недвижимости в Сочи, коммуникации пользователей и управления своими бронированиями и квартирами.\n"
+"EasySochi это платформа для сдачи в аренду и поиску недвижимости в Сочи, коммуникации пользователей и управления своими бронированиями и квартирами.\n"
 "Моя цель - создать альтернативу дорогим агрегаторам, и за счет минимальной комиссии за пользование инструментом предложить пользователям конкурентную цену.\n"
 "В широком смысле, это настраиваемый масштабируемый продукт для управления бизнесом в сфере услуг, аренды, проката и т.п. По вопросам разработки и внедрения для Вашего бизнеса напишите мне в раздел Помощь"
 
@@ -86,7 +85,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Get logger with user context
     user_id = update.effective_user.id if update.effective_user else None
     chat_id = update.effective_chat.id if update.effective_chat else None
-    logger = get_logger(__name__, user_id=user_id, chat_id=chat_id)
+    start_logger = get_logger(__name__, user_id=user_id, chat_id=chat_id)
     try:
         with LogExecutionTime("user_registration", logger, user_id, chat_id):
             if update.message:
@@ -94,11 +93,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif update.callback_query:
                 user_choice = update.callback_query.data
             else:
-                logger.warning("choose_role: ни message, ни callback_query нет в update")
+                start_logger.warning("choose_role: ни message, ни callback_query нет в update")
                 return ConversationHandler.END
             
             # Enhanced logging with context
-            logger.info(
+            start_logger.info(
                 f"User started bot and chose role: {user_choice}",
                 extra={
                     'action': 'role_selection',
@@ -135,7 +134,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         return CHOOSING_ROLE
     except Exception as e:
-        logger.error(
+        start_logger.error(
         f"Error in start handler: {str(e)}",
         extra={
             'action': 'start_error',
@@ -201,7 +200,7 @@ async def choose_role(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return ASK_PHONE
             else:
                 await update.message.reply_text(
-                    "Ваш номер уже есть в базе.",
+                    "Номер телефона сохранен.",
                     reply_markup=ReplyKeyboardRemove()
                 )
 
@@ -684,4 +683,5 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "❌ Действие отменено. Для продолжения работы нажмите /start",
         reply_markup=ReplyKeyboardRemove()
     )
+    context.user_data.clear()
     return ConversationHandler.END

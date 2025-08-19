@@ -333,4 +333,5 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "❌ Отмена добавления объекта.",
         reply_markup=ReplyKeyboardRemove()
     )
+    context.user_data.clear()
     return ConversationHandler.END
