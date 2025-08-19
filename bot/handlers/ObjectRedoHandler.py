@@ -7,15 +7,18 @@ from sqlalchemy import select, delete
 
 from telegram import Update
 
-#from bot.handlers.AddObjectHandler import ADDRESS_INPUT
+from utils.logging_config import log_function_call, LogExecutionTime, get_logger
 
+logger = get_logger(__name__)
+
+@log_function_call(action="redo_oblect")
 async def redo_apartment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     apartment_id = int(update.callback_query.data.split("_")[-1])
     async with get_async_session() as session:
         await session.execute(delete(Apartment).where(Apartment.id == apartment_id))
         await session.commit()
 
-    await update.callback_query.edit_message_text("🚫 Данные удалены. Начнём заново /add_object")
+    await update.callback_query.edit_message_text("🚫 Данные удалены. Начните сначала /add_object")
     
     #return ADDRESS_INPUT
 

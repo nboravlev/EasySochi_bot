@@ -11,10 +11,15 @@ from telegram import Update
 
 from telegram.ext import ContextTypes
 
+from utils.logging_config import log_function_call, LogExecutionTime, get_logger
 
 # Предположим, статус 5 = "pending", статус 6 = "confirmed"
 ACTIVE_BOOKING_STATUSES = [5, 6]
 
+
+logger = get_logger(__name__)
+
+@log_function_call(action="Apartment_delete")
 async def delete_apartment(apartment_id: int, tg_user_id: int, update: Update, context: ContextTypes.DEFAULT_TYPE):
     async with get_async_session() as session:
         # Получаем квартиру с букингами

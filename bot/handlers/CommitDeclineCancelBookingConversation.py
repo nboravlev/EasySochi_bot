@@ -27,8 +27,13 @@ from sqlalchemy import select, update as sa_update
 
 from sqlalchemy.orm import selectinload
 
+from utils.logging_config import log_function_call, LogExecutionTime, get_logger
+
+logger = get_logger(__name__)
+
 DECLINE_REASON = range(1)
 
+@log_function_call(action = "Booking_decline_initiated")
 async def booking_decline_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -137,6 +142,7 @@ async def booking_decline_reason(update: Update, context: ContextTypes.DEFAULT_T
 # ✅ Only one function: booking confirmation
 BOOKING_STATUS_PENDING = 5
 BOOKING_STATUS_CONFIRMED = 6
+@log_function_call(action = "Booking_confirmation")
 async def booking_confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle booking confirmation by owner"""
     query = update.callback_query

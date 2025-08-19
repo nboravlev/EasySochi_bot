@@ -33,6 +33,8 @@ from utils.anti_contact_filter import sanitize_message
 
 from utils.full_view_owner import render_apartment_card_full
 
+from utils.logging_config import log_function_call, LogExecutionTime, get_logger
+
 
 # Состояния
 (
@@ -50,7 +52,11 @@ from utils.full_view_owner import render_apartment_card_full
     CONFIRMATION
 ) = range(12)
 
-# ⬇️ Старт
+
+
+logger = get_logger(__name__)
+
+@log_function_call(action="Adding_object_start")
 async def start_add_object(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Начало добавления объекта: обработка как команды, так и колбэка"""
     # Определяем источник вызова

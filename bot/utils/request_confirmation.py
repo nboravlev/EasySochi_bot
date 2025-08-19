@@ -4,6 +4,11 @@ from datetime import timedelta
 
 from utils.send_and_pin import send_and_pin_message
 
+from utils.logging_config import log_function_call, LogExecutionTime, get_logger
+
+logger = get_logger(__name__)
+
+@log_function_call(action="Confirmation_request_sent")
 async def send_booking_request_to_owner(bot, booking):
     owner_chat_id = booking.apartment.owner.tg_user_id
     print(f"[DEBUG] Вызов send_booking_request_to_owner для owner_id={owner_chat_id}")

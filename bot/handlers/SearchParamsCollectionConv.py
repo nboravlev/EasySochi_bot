@@ -39,6 +39,8 @@ from db.models.booking_types import BookingType
 from sqlalchemy import update as sa_update, select 
 from sqlalchemy.orm import selectinload
 
+from utils.logging_config import log_function_call, LogExecutionTime, get_logger
+
 # Состояния диалога
 (SELECTING_CHECKIN, 
  SELECTING_CHECKOUT, 
@@ -47,6 +49,9 @@ from sqlalchemy.orm import selectinload
  GUESTS_NUMBER,
  BOOKING_COMMENT)= range(6)
 
+logger = get_logger(__name__)
+
+@log_function_call(action="Start_search_session")
 async def start_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Старт поиска жилья: инициализация данных пользователя"""
     # Определяем источник вызова

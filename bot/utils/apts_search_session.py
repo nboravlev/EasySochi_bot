@@ -6,7 +6,11 @@ from db.models.search_sessions import SearchSession
 from db.models.booking_types import BookingType
 from db.models.bookings import Booking
 
+from utils.logging_config import log_function_call, LogExecutionTime, get_logger
 
+logger = get_logger(__name__)
+
+@log_function_call(action="Search_session")
 async def get_apartments(
     check_in: datetime,
     check_out: datetime,
