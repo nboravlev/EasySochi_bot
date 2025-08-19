@@ -44,8 +44,7 @@ Telegram-бот для посуточной аренды жилья в Сочи.
 
 1. Клонируйте репозиторий:
 ```bash
-git clone https://github.com/yourusername/EasySochi_bot.git
-cd EasySochi_bot
+git clone https://github.com/nboravlev/EasySochi_bot.git .
 ```
 2. Создайте директорию secrets и добавьте в нее файлы доступа в БД и сервисам (бот_токен, MapBox_token)
 ```
