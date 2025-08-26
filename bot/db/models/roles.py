@@ -10,7 +10,7 @@ class Role(Base):
     name = Column(String(50), nullable=False, unique=True)
     
     # Bidirectional relationship
-    users = relationship("User", back_populates="role")
+    sessions = relationship("Session", back_populates="role")
     
     def __repr__(self):
         return f"<Role(id={self.id}, name='{self.name}')>"

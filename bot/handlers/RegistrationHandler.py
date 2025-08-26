@@ -6,17 +6,9 @@ registration_conversation = ConversationHandler(
     entry_points=[CommandHandler("start", start),
                   CallbackQueryHandler(start, pattern="back_menu")],
     states={
-        CHOOSING_ROLE: [
-            MessageHandler(filters.TEXT & ~filters.COMMAND, choose_role)
-        ],
-        ASK_PHONE: [
-            MessageHandler(filters.CONTACT, save_phone),
-            MessageHandler(filters.Regex("^Пропустить$"), save_phone)  # ✅ Added for "Пропустить"
-        ],
-        ASK_LOCATION: [
-            MessageHandler(filters.LOCATION, save_location),
-            MessageHandler(filters.Regex("^Не отправлять$"), save_location)  # ✅ Added for "⏭ Не отправлять"
-        ],
+        NAME_REQUEST: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_name_request)],
+        ASK_PHONE: [MessageHandler(filters.TEXT | filters.CONTACT, handle_phone_registration)],
+        MAIN_MENU: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_menu_choice)],
         VIEW_BOOKINGS: [CallbackQueryHandler(show_renter_bookings, pattern=r"^book_(next|prev)_\d+$"),
                         CallbackQueryHandler(start, pattern="^back_menu$")],
         VIEW_OBJECTS: [CallbackQueryHandler(show_owner_objects, pattern=r"^apt_(next|prev|delete)_\d+$"),

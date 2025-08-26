@@ -31,8 +31,9 @@ class Apartment(Base):
     address = Column(String(255), nullable=False)
     short_address = Column(String(100), nullable=False)
     type_id = Column(Integer, ForeignKey("apartments.apartment_types.id", ondelete="RESTRICT"), nullable=False)
-    owner_id = Column(Integer, ForeignKey("public.users.id", ondelete="CASCADE"), nullable=False)
-
+    owner_tg_id = Column(BIGINT, 
+                    ForeignKey("public.users.tg_user_id", ondelete="CASCADE"),
+                    nullable = False, unique = False)
     floor = Column(Integer, nullable=True)
     has_elevator = Column(Boolean, nullable=False, default = False, server_default=text("false"))
     has_balcony = Column(Boolean, nullable=False, default=False, server_default=text("false"))
@@ -58,4 +59,4 @@ class Apartment(Base):
     images = relationship("Image", back_populates = "apartment", lazy="selectin")
 
     def __repr__(self):
-        return f"<Apartment(id={self.id}, address={self.address}, owner_id={self.owner_id})>"
+        return f"<Apartment(id={self.id}, address={self.address}, owner_id={self.owner_tg_id})>"

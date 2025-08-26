@@ -35,8 +35,8 @@ def prepare_owner_objects_cards(current_apartment: Apartment, current_index: int
         f"⏳ Ожидает подтверждения: {pending}\n"
         f"💸 На сумму: {pending_fund}\n\n"
         f"⏳ Завершено: {complit}\n"
-        f"💰 На сумму: {complit_fund}\n"
-        f"📍 {current_index+1}/{total}"
+        f"💰 На сумму: {complit_fund}\n\n"
+        f"📍 {current_index+1} из {total}"
     )
 
     # кнопки навигации

@@ -80,8 +80,8 @@ async def check_expired_booking(context):
 async def notify_timeout(bot, booking):
     """Отправка уведомлений о том, что бронь истекла"""
     logger = get_logger(__name__)
-    guest_chat_id = booking.user.tg_user_id
-    owner_chat_id = booking.apartment.owner.tg_user_id
+    guest_chat_id = booking.tg_user_id
+    owner_chat_id = booking.apartment.tg_user_id
     created_local = (booking.created_at + timedelta(hours=3)).replace(second=0, microsecond=0)
 
 # Форматируем для сообщения
