@@ -11,47 +11,42 @@ from db.models.booking_types import BookingType
 from db.models.booking_chat import BookingChat
 
 
-async def register_user_and_session(tg_user, bot_id: int, role_id:int):
-    """
-    1. Проверяем, есть ли пользователь с telegram_id.
-    2. Если нет — создаём запись в public.users.
-    3. Всегда создаём новую запись в public.sessions.
-    """
-
-
+async def get_user_by_tg_id(tg_user_id: int):
+    """Get user by Telegram ID"""
     async with get_async_session() as session:
         result = await session.execute(
-            select(User).where((User.tg_user_id == tg_user.id)&
-            (User.role_id == role_id))
+            select(User).where(User.tg_user_id == tg_user_id)
         )
-        user = result.scalars().first()
+        return result.scalars().first()
 
-        is_new_user = False
 
-        # 2) Если новый — создаём
-        if user is None:
-            is_new_user = True
-            user = User(
-                tg_user_id = tg_user.id,
-                username = tg_user.username,
-                firstname = tg_user.first_name.strip() if tg_user.first_name else None,
-                is_bot = tg_user.is_bot,
-                role_id = role_id,
-                created_at  = datetime.utcnow()
-            )
-            session.add(user)
-            await session.flush()  # чтобы user.id стал доступен
-       
+async def create_user(tg_user, first_name=None, phone_number=None):
+    """Create new user in database"""
+    async with get_async_session() as session:
+        user = User(
+            tg_user_id=tg_user.id,
+            username=tg_user.username,
+            firstname=first_name,
+            phone_number=phone_number,
+            is_bot=tg_user.is_bot,
+            created_at=datetime.utcnow()
+        )
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+        return user
 
-        # 3) Создаём новую сессию
+
+async def create_session(tg_user_id: int, role_id: int):
+    """Create new session with role"""
+    async with get_async_session() as session:
         new_session = Session(
-            user_id    = user.id,
-            created_at = datetime.utcnow(),
-            tg_bot_id = bot_id
+            tg_user_id=tg_user_id,
+            role_id=role_id,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
         )
         session.add(new_session)
-
-        # 4) Фиксируем всё одним коммитом
         await session.commit()
-        # Можно вернуть объекты, если нужно
-        return user, new_session, is_new_user
+        await session.refresh(new_session)
+        return new_session

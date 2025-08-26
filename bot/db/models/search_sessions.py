@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, ForeignKey, DateTime, func, text
+from sqlalchemy import Column, Integer, ForeignKey, DateTime, func, text, BIGINT
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 from sqlalchemy.orm import relationship
 from db.db import Base
@@ -15,7 +15,9 @@ class SearchSession(Base):
                 ForeignKey("public.sessions.id", ondelete="CASCADE"),
                 nullable=False)
 
-    user_id = Column(Integer, ForeignKey("public.users.id", ondelete="CASCADE"), nullable=False)
+    tg_user_id = Column(BIGINT, 
+                    ForeignKey("public.users.tg_user_id", ondelete="CASCADE"),
+                    nullable = False, unique = False)
 
     filters = Column(JSONB, nullable=False)                     # JSON с параметрами поиска
     apartment_ids = Column(ARRAY(Integer), nullable=True)      # список ID квартир

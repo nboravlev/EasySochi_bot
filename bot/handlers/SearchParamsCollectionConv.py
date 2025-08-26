@@ -51,6 +51,9 @@ from utils.logging_config import log_function_call, LogExecutionTime, get_logger
 
 logger = get_logger(__name__)
 
+BOOKING_STATUS_PENDING = 5
+BOOKING_STATUS_CONFIRMED = 6
+
 @log_function_call(action="Start_search_session")
 async def start_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Старт поиска жилья: инициализация данных пользователя"""
@@ -282,7 +285,7 @@ async def send_message(update: Update, text: str,reply_markup=None):
 
 async def filter_apartments(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Фильтрация квартир и сохранение результатов в user_data."""
-    user_id = context.user_data.get("user_id")
+    tg_user_id = context.user_data.get("tg_user_id")
     session_id = context.user_data.get("session_id")
     type_ids = context.user_data.get("selected_types")
     check_in = context.user_data.get("check_in",date)
@@ -296,12 +299,12 @@ async def filter_apartments(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "price": price
     }
     print(f"DEBUG_DATE_TYPE: {type(check_in)}")
-    if not user_id:
+    if not tg_user_id:
         await send_message(update, "Ошибка: не найден user_id. Пожалуйста, начните сначала /start")
         return None, None
 
     # ✅ Получаем список квартир
-    apartment_ids, apartments, new_search = await get_apartments(check_in, check_out, session_id, user_id, filters)
+    apartment_ids, apartments, new_search = await get_apartments(check_in, check_out, session_id, tg_user_id, filters)
 
     if not apartment_ids:
         keyboard = [
@@ -425,9 +428,9 @@ async def handle_bookings_notion(update: Update, context: ContextTypes.DEFAULT_T
 
     async with get_async_session() as session:
         booking = Booking(
-            user_id = context.user_data['user_id'],
+            tg_user_id = context.user_data['tg_user_id'],
             apartment_id = context.user_data['chosen_apartment'],
-            status_id = 5,
+            status_id = BOOKING_STATUS_PENDING,
             guest_count = context.user_data['guest_count'],
             total_price = total,
             comments = comment,

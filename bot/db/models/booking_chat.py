@@ -6,7 +6,8 @@ from sqlalchemy import (
     Date,
     Numeric,
     CheckConstraint,
-    DateTime,Boolean, text, Index, TEXT
+    DateTime,Boolean, text, Index, TEXT,
+    BIGINT
 )
 from sqlalchemy.orm import relationship
 from db.db import Base
@@ -18,7 +19,9 @@ class BookingChat(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     booking_id = Column(Integer, ForeignKey("public.bookings.id", ondelete="CASCADE"), nullable=False)
-    sender_id = Column(Integer, ForeignKey("public.users.id", ondelete="CASCADE"), nullable=False)
+    sender_tg_id = Column(BIGINT, 
+                    ForeignKey("public.users.tg_user_id", ondelete="CASCADE"),
+                    nullable = False, unique = False)
     message_text = Column(TEXT, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -27,5 +30,5 @@ class BookingChat(Base):
     booking = relationship("Booking", back_populates="booking_chat")
 
 
-def __repr__(self):
-    return f"<booking_id={self.booking_id}, user_id={self.sender_id},message = {self.message_text})>"
+    def __repr__(self):
+        return f"<BookingChat(booking_id={self.booking_id}, user_id={self.sender_tg_id},message = {self.message_text})>"

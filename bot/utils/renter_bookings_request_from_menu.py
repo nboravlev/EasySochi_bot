@@ -22,7 +22,7 @@ def prepare_renter_bookings_cards(current_booking: Booking, current_index: int, 
         f"🧍‍♂️ Гостей: {current_booking.guest_count}\n"
         f"💰 Стоимость: {current_booking.total_price} ₽\n"
         f"⚡️Идентификатор бронирования: {current_booking.id}\n"
-        f"📍 {current_index+1}/{total}"
+        f"📍 {current_index+1} из {total}"
     )
 
     # кнопки навигации

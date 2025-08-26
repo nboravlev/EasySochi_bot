@@ -6,7 +6,8 @@ from sqlalchemy import (
     Date,
     Numeric,
     CheckConstraint,
-    DateTime,Boolean, text, Index
+    DateTime,Boolean, text, Index,
+    BIGINT
 )
 from sqlalchemy.orm import relationship
 from db.db import Base
@@ -25,7 +26,9 @@ class Booking(Base):
 
     id = Column(Integer, primary_key=True)
     
-    user_id = Column(Integer, ForeignKey("public.users.id", ondelete="CASCADE"), nullable=False)
+    tg_user_id = Column(BIGINT, 
+                    ForeignKey("public.users.tg_user_id", ondelete="CASCADE"),
+                    nullable = False, unique = False)
     apartment_id = Column(Integer, ForeignKey("apartments.apartments.id", ondelete="CASCADE"), nullable=False)
     status_id = Column(Integer, ForeignKey("public.booking_types.id", ondelete="CASCADE"), nullable=False)
     
@@ -49,6 +52,6 @@ class Booking(Base):
     booking_type = relationship("BookingType", back_populates="booking")
     booking_chat = relationship("BookingChat", back_populates = "booking")
 
-def __repr__(self):
-    return f"<Apartment_id={self.id}, address={self.address}, user_id={self.user_id},status = {self.stutus_id})>"
+    def __repr__(self):
+        return f"<Booking(id={self.id}, apartment={self.apartment.short_address if self.apartment else None}, user={self.tg_user_id},status ={self.status_id})>"
 

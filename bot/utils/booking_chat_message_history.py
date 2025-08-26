@@ -53,7 +53,7 @@ async def send_booking_chat_history(booking_id: int,update: Update):
     # Сборка текста истории
     text_lines = [f"📜 10 сообщений из истории бронирования №{booking_id}:"]
     for msg in messages[-10:]:  # последние 10 сообщений
-        sender = "👤 Арендатор" if msg.sender_id == booking.user_id else "🏠 Собственник"
+        sender = "👤 Арендатор" if msg.sender_tg_id == booking.tg_user_id else "🏠 Собственник"
         timestamp = msg.created_at.strftime("%d.%m %H:%M")
         text_lines.append(f"{timestamp} | {sender}:\n{msg.message_text}")
 

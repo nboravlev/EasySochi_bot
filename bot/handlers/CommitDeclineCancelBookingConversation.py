@@ -101,8 +101,8 @@ async def booking_decline_reason(update: Update, context: ContextTypes.DEFAULT_T
 
     # Определяем инициатора
     initiator_tg_id = update.effective_user.id
-    guest_tg_id = booking.user.tg_user_id
-    owner_tg_id = booking.apartment.owner.tg_user_id
+    guest_tg_id = booking.tg_user_id
+    owner_tg_id = booking.apartment.owner_tg_id
 
     if initiator_tg_id == guest_tg_id:
         # Отмену делает гость → уведомляем владельца
@@ -192,7 +192,7 @@ async def booking_confirm_callback(update: Update, context: ContextTypes.DEFAULT
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await context.bot.send_message(
-        chat_id=booking.user.tg_user_id,
+        chat_id=booking.tg_user_id,
         text=(
             f"✅ Ваше бронирование №{booking.id} подтверждено!\n\n"
             f"Для получения дополнительной информации и по вопросам оплаты "
@@ -203,7 +203,7 @@ async def booking_confirm_callback(update: Update, context: ContextTypes.DEFAULT
 
     # ✅ Notify owner
     await context.bot.send_message(
-        chat_id=booking.apartment.owner.tg_user_id,
+        chat_id=booking.apartment.owner_tg_id,
         text=(
             f"✅ Вы подтвердили бронирование №{booking.id}.\n"
             f"Пользователь {booking.user.firstname or booking.user.tg_user_id} получил уведомление.\n"

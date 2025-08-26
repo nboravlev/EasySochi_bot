@@ -292,18 +292,17 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_photos_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"[DEBUG] context.user_data: {context.user_data}")
-    user_id = context.user_data.get("user_id")
+    tg_user_id = context.user_data.get("tg_user_id")
     
-    if not user_id:
-        await update.message.reply_text("Ошибка: не найден user_id. Пожалуйста, начните сначала /start.")
-        return ConversationHandler.END
+    if not tg_user_id:
+        tg_user_id = update.effective_user.id
     async with get_async_session() as session:
         apt = Apartment(
             address=context.user_data['address'],
             short_address = context.user_data['address_short'],
             coordinates = context.user_data["point"],
             type_id=context.user_data['type_id'],
-            owner_id = user_id,
+            owner_tg_id = tg_user_id,
             floor=context.user_data['floor'],
             max_guests = context.user_data['max_guests'],
             has_elevator=context.user_data['elevator'],

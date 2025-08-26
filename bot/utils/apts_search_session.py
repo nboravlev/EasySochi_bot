@@ -15,7 +15,7 @@ async def get_apartments(
     check_in: datetime,
     check_out: datetime,
     session_id: int,
-    user_id: int,
+    tg_user_id: int,
     filters: dict
 ) -> tuple[list[int], list[Apartment], SearchSession]:
 
@@ -68,7 +68,7 @@ async def get_apartments(
         # ✅ Логируем поиск
         new_search = SearchSession(
             session_id=session_id,
-            user_id=user_id,
+            tg_user_id=tg_user_id,
             filters=filters,  # JSON сохраняем как есть
             apartment_ids=apartment_ids,
             created_at=datetime.utcnow()

@@ -106,11 +106,8 @@ async def booking_chat_message(update: Update, context: ContextTypes.DEFAULT_TYP
             return
 
         # 2. Получаем информацию о гостях и владельце
-        result = await session.execute(
-            select(User).where(User.id == booking.user_id)
-        )
-        renter = result.scalar_one_or_none()
-        if not renter:
+        renter_id = booking.tg_user_id
+        if not renter_id:
             await update.message.reply_text("❌ Арендатор не найден.")
             return ConversationHandler.END
 
@@ -122,11 +119,9 @@ async def booking_chat_message(update: Update, context: ContextTypes.DEFAULT_TYP
             await update.message.reply_text("❌ Объект не найден.")
             return ConversationHandler.END
 
-        result = await session.execute(
-            select(User).where(User.id == apartment.owner_id)
-        )
-        owner = result.scalar_one_or_none()
-        if not owner:
+
+        owner_id = apartment.owner_tg_id
+        if not owner_id:
             await update.message.reply_text("❌ Владелец не найден.")
             return ConversationHandler.END
 
@@ -139,21 +134,19 @@ async def booking_chat_message(update: Update, context: ContextTypes.DEFAULT_TYP
             "callback_data": callback_data,
             "booking_id": booking_id,
             "initiator_tg_user_id": user_tg_id,
-            "renter_id": renter.id if renter else None,
-            "renter_tg_user_id": renter.tg_user_id if renter else None,
-            "owner_id": owner.id if owner else None,
-            "owner_tg_user_id": owner.tg_user_id if owner else None,
+            "renter_id": renter_id or None,
+            "owner_id": owner_id or None
         }
     )
 
         # 3. Определяем роль отправителя
-        if user_tg_id == renter.tg_user_id:
-            sender_id = renter.id
-            recipient_tg_id = owner.tg_user_id
+        if user_tg_id == renter_id:
+            sender_id = renter_id
+            recipient_tg_id = owner_id
             sender_type = "guest"
-        elif user_tg_id == owner.tg_user_id:
-            sender_id = owner.id
-            recipient_tg_id = renter.tg_user_id
+        elif user_tg_id == owner_id:
+            sender_id = owner_id
+            recipient_tg_id = renter_id
             sender_type = "owner"
         else:
             await update.message.reply_text("❌ Вы не участник этого бронирования")
@@ -162,7 +155,7 @@ async def booking_chat_message(update: Update, context: ContextTypes.DEFAULT_TYP
         # 4. Сохраняем сообщение
         chat_msg = BookingChat(
             booking_id=booking_id,
-            sender_id=sender_id,
+            sender_tg_id=sender_id,
             message_text=text[:255],
             created_at=datetime.utcnow()
         )

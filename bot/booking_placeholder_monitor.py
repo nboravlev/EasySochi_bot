@@ -21,24 +21,17 @@ async def check_placeholder_booking(context):
     bot = context.bot
 
     try:
-        Tenant = aliased(User)  # арендатора
-        Owner = aliased(User)   # владельца квартиры
-
         async with get_async_session() as session:
             stmt = (
                 select(Booking)
-                .join(Tenant, Booking.user)              # join к арендатору
-                .join(Apartment, Booking.apartment)      # join к квартире
-                .join(Owner, Apartment.owner)            # join к владельцу
                 .options(
-                    selectinload(Booking.apartment).selectinload(Apartment.owner),
-                    selectinload(Booking.user)
+                    selectinload(Booking.apartment)
                 )
                 .where(
                     and_(
                         Booking.status_id.in_(TARGET_BOOKING_STATUS),
                         Booking.is_active == True,
-                        Tenant.tg_user_id == Owner.tg_user_id  # проверка tg_user_id
+                        Booking.tg_user_id == Apartment.tg_user_id  # проверка tg_user_id
                     )
                 )
             )
