@@ -44,3 +44,8 @@ __pycache__/
 alembic/versions/
 
 reset_db.py
+
+bot/db_monitor.py
+bot/booking_complit_monitor.py
+bot/booking_expire_monitor.py
+bot/booking_placeholder_monitor.py
