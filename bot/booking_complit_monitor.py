@@ -26,8 +26,6 @@ async def check_complit_booking(context):
                 select(Booking)
                 .options(
                     selectinload(Booking.apartment)
-                    .selectinload(Apartment.owner),
-                    selectinload(Booking.user)
                 )
                 .where(
                     and_(
@@ -61,8 +59,8 @@ async def check_complit_booking(context):
 async def notify_complit_booking(bot, booking):
     """Отправка уведомлений о том, что бронирование завершно"""
     logger = get_logger(__name__)
-    guest_chat_id = booking.user.tg_user_id
-    owner_chat_id = booking.apartment.owner.tg_user_id
+    guest_chat_id = booking.tg_user_id
+    owner_chat_id = booking.apartment.owner_tg_id
     
 
     guest_text = (

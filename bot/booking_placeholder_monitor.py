@@ -10,7 +10,7 @@ from utils.logging_config import log_function_call, LogExecutionTime, get_logger
 
 
 # Константы
-TARGET_BOOKING_STATUS = [5,6,8,11]      
+TARGET_BOOKING_STATUS = [5,6,11]      
 BOOKING_STATUS_TIMEOUT = 7    # заглушка
 
 
@@ -23,18 +23,16 @@ async def check_placeholder_booking(context):
     try:
         async with get_async_session() as session:
             stmt = (
-                select(Booking)
-                .options(
-                    selectinload(Booking.apartment)
-                )
-                .where(
-                    and_(
-                        Booking.status_id.in_(TARGET_BOOKING_STATUS),
-                        Booking.is_active == True,
-                        Booking.tg_user_id == Apartment.tg_user_id  # проверка tg_user_id
-                    )
+            select(Booking)
+            .join(Apartment, Booking.apartment_id == Apartment.id)
+            .where(
+                and_(
+                    Booking.status_id.in_(TARGET_BOOKING_STATUS),
+                    Booking.is_active.is_(True),
+                    Booking.tg_user_id == Apartment.owner_tg_id
                 )
             )
+        )
 
             result = await session.execute(stmt)
             placehold_bookings = result.scalars().all()

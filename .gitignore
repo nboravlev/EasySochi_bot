@@ -45,7 +45,15 @@ alembic/versions/
 
 reset_db.py
 
+docs/progress.md
+
+#монитор БД
 bot/db_monitor.py
-bot/booking_complit_monitor.py
-bot/booking_expire_monitor.py
-bot/booking_placeholder_monitor.py
+
+#локальные файлы конфигурации
+docker-compose.yml
+/db/postgresql.conf
+/log_viewer/log_viewer.py
+/log_viewer/Dockerfile
+/bot/db/db_async.py
+/bot/entrypoint.sh
