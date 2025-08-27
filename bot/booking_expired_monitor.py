@@ -26,13 +26,11 @@ async def check_expired_booking(context):
                 select(Booking)
                 .options(
                     selectinload(Booking.apartment)
-                    .selectinload(Apartment.owner),
-                    selectinload(Booking.user)
                 )
                 .where(
                     and_(
                     Booking.status_id == TARGET_BOOKING_STATUS,
-                    func.now() - Booking.created_at > timedelta(hours=24),
+                    Booking.created_at < func.now() - timedelta(hours=24),
                     Booking.is_active == True
                     )
                 )
@@ -63,11 +61,18 @@ async def check_expired_booking(context):
 
             for booking in expired_bookings:
                 booking.status_id = BOOKING_STATUS_TIMEOUT
-                await session.commit()
+            
+            await session.commit()
 
 
-                                # Замер времени уведомлений
-                with LogExecutionTime("notify_timeout", logger, user_id=booking.user.id, chat_id=booking.apartment.owner.id):
+            # Замер времени уведомлений
+            for booking in expired_bookings:
+                with LogExecutionTime(
+                    "notify_timeout",
+                    logger,
+                    user_id=booking.tg_user_id,
+                    chat_id=booking.apartment.owner.tg_user_id
+                ):
                     await notify_timeout(bot, booking)
 
     except Exception as e:
@@ -81,7 +86,7 @@ async def notify_timeout(bot, booking):
     """Отправка уведомлений о том, что бронь истекла"""
     logger = get_logger(__name__)
     guest_chat_id = booking.tg_user_id
-    owner_chat_id = booking.apartment.tg_user_id
+    owner_chat_id = booking.apartment.owner_tg_id
     created_local = (booking.created_at + timedelta(hours=3)).replace(second=0, microsecond=0)
 
 # Форматируем для сообщения

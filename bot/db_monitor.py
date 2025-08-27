@@ -18,16 +18,16 @@ async def check_db(context):
         async with get_async_session() as session:
             await session.execute(text("SELECT 1"))
         status_ok = True
-        logger.info("🫥 DB_test check passed")
+        logger.info("🫥 DB_prod_rent check passed")
     except Exception as e:
         status_ok = False
-        logger.error(f"❌ DB_test check failed: {e}")
+        logger.error(f"❌ DB_prod_rent check failed: {e}")
 
     # ВСЕГДА отправляем статус, без проверки на изменение
     text_msg = (
-        "😎 <b>База данных test доступна</b>"
+        "🏡 <b>База данных prod_rent доступна</b>"
         if status_ok
-        else "❌ <b>База данных test недоступна!</b>"
+        else "❄️ <b>База данных prod_rent недоступна!</b>"
     )
     
     try:
