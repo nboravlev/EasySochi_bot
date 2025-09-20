@@ -1,17 +1,12 @@
-# bot/api/log_viewer.py
-from fastapi import FastAPI, Request, Depends, HTTPException, Query
+from fastapi import FastAPI, Request, Query, HTTPException
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 import json
-import os
-import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional, Dict, Any
-import re
 from collections import Counter
-import gzip
 
 class LogReader:
     def __init__(self, log_dir: str = "/app/logs"):
@@ -45,12 +40,21 @@ class LogReader:
         logs = []
         structured_log_file = self.log_dir / "bot_structured.log"
         
+        print(f"Looking for log file: {structured_log_file}")
+        print(f"File exists: {structured_log_file.exists()}")
+        print(f"Log directory exists: {self.log_dir.exists()}")
+        if self.log_dir.exists():
+            print(f"Files in log dir: {list(self.log_dir.glob('*'))}")
+        
         if not structured_log_file.exists():
             return logs
         
         try:
             with open(structured_log_file, 'r', encoding='utf-8') as f:
-                for line in f:
+                lines = f.readlines()
+                print(f"Read {len(lines)} lines from log file")
+                
+                for line_num, line in enumerate(lines):
                     if not line.strip():
                         continue
                     
@@ -74,10 +78,23 @@ class LogReader:
                         
                         # Time filtering
                         if start_time or end_time:
-                            log_time = datetime.fromisoformat(log_entry['timestamp'].replace('Z', '+00:00'))
-                            if start_time and log_time < start_time:
-                                continue
-                            if end_time and log_time > end_time:
+                            try:
+                                timestamp_str = log_entry.get('timestamp', '')
+                                if timestamp_str.endswith('Z'):
+                                    log_time = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                                else:
+                                    log_time = datetime.fromisoformat(timestamp_str)
+                                
+                                # Make log_time timezone-naive for comparison
+                                if log_time.tzinfo is not None:
+                                    log_time = log_time.replace(tzinfo=None)
+                                
+                                if start_time and log_time < start_time:
+                                    continue
+                                if end_time and log_time > end_time:
+                                    continue
+                            except (ValueError, TypeError) as e:
+                                print(f"Error parsing timestamp: {timestamp_str}, error: {e}")
                                 continue
                         
                         logs.append(log_entry)
@@ -85,12 +102,14 @@ class LogReader:
                         if len(logs) >= limit:
                             break
                     
-                    except json.JSONDecodeError:
+                    except json.JSONDecodeError as e:
+                        print(f"Error parsing JSON on line {line_num}: {e}")
                         continue
         
         except Exception as e:
             print(f"Error reading logs: {e}")
         
+        print(f"Returning {len(logs)} logs after filtering")
         return list(reversed(logs))  # Most recent first
     
     def get_log_stats(self, hours: int = 24) -> Dict[str, Any]:
@@ -131,7 +150,7 @@ class LogReader:
 # FastAPI app setup
 app = FastAPI(title="Bot Log Viewer", description="Web interface for viewing bot logs")
 
-# Mount static files and templates
+# Mount static files and templates - FIXED FOR YOUR DOCKERFILE STRUCTURE
 templates = Jinja2Templates(directory="app/templates")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
@@ -140,11 +159,7 @@ log_reader = LogReader()
 @app.get("/")
 async def dashboard(request: Request):
     """Main dashboard page"""
-    stats = log_reader.get_log_stats()
-    return templates.TemplateResponse(
-        "dashboard.html",
-        {"request": request, "stats": stats}
-    )
+    return templates.TemplateResponse("dashboard.html", {"request": request})
 
 @app.get("/api/logs")
 async def get_logs(
@@ -190,57 +205,31 @@ async def get_log_files():
     """API endpoint to get list of log files"""
     return {"files": log_reader.get_log_files()}
 
-@app.get("/api/download/{filename}")
-async def download_log_file(filename: str):
-    """Download a specific log file"""
-    file_path = log_reader.log_dir / filename
-    
-    if not file_path.exists() or not file_path.is_file():
-        raise HTTPException(status_code=404, detail="Log file not found")
-    
-    # Security check - only allow log files
-    if not filename.endswith(('.log', '.log.1', '.log.2', '.log.3', '.log.4', '.log.5')):
-        raise HTTPException(status_code=403, detail="Access denied")
-    
-    def file_generator():
-        with open(file_path, 'rb') as f:
-            while True:
-                chunk = f.read(8192)
-                if not chunk:
-                    break
-                yield chunk
-    
-    return StreamingResponse(
-        file_generator(),
-        media_type='application/octet-stream',
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
-    )
-
 @app.get("/logs")
 async def logs_page(request: Request):
     """Logs viewing page"""
     return templates.TemplateResponse("logs.html", {"request": request})
 
-@app.get("/api/health")
+@app.get("/health")
 async def health_check():
     """Health check endpoint"""
+    log_dir_exists = log_reader.log_dir.exists()
+    log_files = log_reader.get_log_files()
+    
     return {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
-        "log_dir_exists": log_reader.log_dir.exists(),
-        "log_files_count": len(log_reader.get_log_files())
+        "log_dir_exists": log_dir_exists,
+        "log_files_count": len(log_files),
+        "log_files": [f['name'] for f in log_files[:5]]  # Show first 5 files for debugging
     }
-
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         "log_viewer:app",
         host="0.0.0.0",
-        port=8080,
+        port=8888,
         log_level="info",
         reload=False
     )

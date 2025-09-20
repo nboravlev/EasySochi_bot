@@ -1,11 +1,10 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ForceReply
 from telegram.ext import ContextTypes, ConversationHandler, ApplicationHandlerStop, CallbackQueryHandler
 
-from utils.logging_config import log_function_call, LogExecutionTime, get_logger
 
 import os
 
-logger = get_logger(__name__)
+
 
 INFO_TEXTS = {
     "info_booking": {
@@ -39,7 +38,7 @@ INFO_TEXTS = {
             "11. В разделе 'Мои объекты' просматривайте ваши объекты и созданные на них заявки;\n"
             "12. Редактирование пока не доступно (только удалить/создать заново);\n"
             "13. Если есть активные брони — не даст удалить, пишите в 'Помощь';\n"
-            "14. Чтобы скрыть объект из поиска на занятые даты — самостоятельно создайте и подтвердите бронирование на даты;\n"
+            "14. Чтобы скрыть объект из поиска на занятые даты — используйте Мои Объекты/Календарь занятости;\n"
             "15. 25 числа месяца приходит напоминание об оплате комиссии за бота."
         )
     }

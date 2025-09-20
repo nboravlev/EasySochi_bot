@@ -11,18 +11,17 @@ from handlers.AdminReplayUserProblemHandler import admin_replay_handler
 from handlers.GlobalCommands import cancel_command
 from handlers.BookingChatConversation import exit_booking_chat
 from handlers.ShowInfoHandler import info_callback_handler, info_command
-
+from handlers.BusyCalendarHandler import busy_calendar
 
 from db_monitor import check_db
 from booking_expired_monitor import check_expired_booking
 from booking_complit_monitor import check_complit_booking
-from booking_placeholder_monitor import check_placeholder_booking
+
 
 import os
 from pathlib import Path
 from datetime import time
 
-from utils.logging_config import setup_logging, log_function_call, get_logger
 
 import os
 
@@ -43,14 +42,7 @@ from telegram.ext import (
     JobQueue
 )
 # Initialize comprehensive logging
-setup_logging(
-    log_level=os.getenv("LOG_LEVEL", "INFO"),
-    log_dir=os.getenv("LOG_DIR", "/app/logs"),
-    enable_console=True,
-    enable_file=True
-)
 
-logger = get_logger(__name__)
 
 async def post_init(application: Application) -> None:
     # Настройка меню команд (синяя плашка)
@@ -77,10 +69,6 @@ async def post_init(application: Application) -> None:
     application.job_queue.run_daily(
         check_complit_booking,
         time(hour=1, minute=19)
-    )
-    application.job_queue.run_daily(
-        check_placeholder_booking,
-        time(hour=1, minute=9)
     )
 
 
@@ -120,7 +108,7 @@ def main():
 
     app.add_handler(booking_chat,group=1)   #обработчик приватных чатов между пользователями
     
-
+    app.add_handler(busy_calendar, group=1) #обработчик календаря занятости
 
 
     

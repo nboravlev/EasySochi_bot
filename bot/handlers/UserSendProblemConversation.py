@@ -5,17 +5,12 @@ from telegram.ext import (
 )
 import os
 
-from utils.logging_config import log_function_call, LogExecutionTime, get_logger
 
 ADMIN_CHAT_ID = int(os.getenv("ADMIN_CHAT_ID"))
 
 SEND_PROBLEM = 1
 
 
-
-logger = get_logger(__name__)
-
-@log_function_call(action="User_asked_support")
 async def start_problem(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("⚠️ Опишите ситуацию, и я передам сообщение администратору.")
     context.user_data["awaiting_problem"] = True
