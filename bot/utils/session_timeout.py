@@ -17,7 +17,6 @@ JOB_NAME_PREFIX = "timeout_"
 #    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 #)
 
-logger = logging.getLogger(__name__)
 
 
 class SessionTimeoutManager:

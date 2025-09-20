@@ -14,6 +14,9 @@ from telegram.ext import (
     ContextTypes,
     filters
 )
+from telegram.error import BadRequest #временная замена моему логгеру
+import logging   #временная замена моему логгеру
+
 from datetime import datetime
 
 from db.db_async import get_async_session
@@ -27,13 +30,10 @@ from sqlalchemy import select, update as sa_update
 
 from sqlalchemy.orm import selectinload
 
-from utils.logging_config import log_function_call, LogExecutionTime, get_logger
-
-logger = get_logger(__name__)
 
 DECLINE_REASON = range(1)
 
-@log_function_call(action = "Booking_decline_initiated")
+
 async def booking_decline_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -45,6 +45,12 @@ async def booking_decline_callback(update: Update, context: ContextTypes.DEFAULT
 
     context.user_data["decline_booking_id"] = booking_id
     context.user_data["status_id"] = status_id
+
+    # ✅ Убираем inline-кнопки из исходного сообщения
+    try:
+        await query.edit_message_reply_markup(reply_markup=None)
+    except BadRequest as e:
+        logging.warning("Не удалось убрать клавиатуру: %s", e)
 
     # Запрашиваем причину
     keyboard = [[KeyboardButton("отправка причины")]]
@@ -142,7 +148,7 @@ async def booking_decline_reason(update: Update, context: ContextTypes.DEFAULT_T
 # ✅ Only one function: booking confirmation
 BOOKING_STATUS_PENDING = 5
 BOOKING_STATUS_CONFIRMED = 6
-@log_function_call(action = "Booking_confirmation")
+
 async def booking_confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle booking confirmation by owner"""
     query = update.callback_query
@@ -201,20 +207,27 @@ async def booking_confirm_callback(update: Update, context: ContextTypes.DEFAULT
         reply_markup=reply_markup
     )
 
-    # ✅ Notify owner
-    await context.bot.send_message(
-        chat_id=booking.apartment.owner_tg_id,
-        text=(
-            f"✅ Вы подтвердили бронирование №{booking.id}.\n"
-            f"Пользователь {booking.user.firstname or booking.user.tg_user_id} получил уведомление.\n"
-            f"Проинструктируйте гостя о способах оплаты, алгоритме заселения и правилах проживания."
-        )
-    )
+        # 2) Убираем inline-кнопки из того сообщения, где была нажата кнопка (owner message)
+    try:
+        # Это удалит клавиатуру под исходным сообщением
+        await query.edit_message_reply_markup(reply_markup=None)
+    except BadRequest as e:
+        # например: сообщение уже удалено или недоступно — логируем и продолжаем
+        logging.warning("Не удалось убрать inline-клавиатуру: %s", e)
 
-    # ✅ Update the original message (remove confirmation buttons)
-    await query.edit_message_text(
-        f"✅ Бронирование №{booking.id} подтверждено!\n"
-        f"Чат с гостем активирован.",reply_markup=ReplyKeyboardRemove()
-    )
+    # 3) (Опционально) Обновляем текст исходного owner-сообщения — без кнопок
+    try:
+        await query.edit_message_text(
+            text=(
+                f"✅ Вы подтвердили бронирование №{booking.id}.\n"
+                f"Пользователь {booking.user.firstname or booking.user.tg_user_id} получил уведомление.\n"
+                "Проинструктируйте гостя о способах оплаты и правилах проживания."
+            ),
+            parse_mode="HTML"
+            # reply_markup=None  # необязательно, т.к. мы уже удалили разметку
+        )
+    except BadRequest:
+        # если не получилось — игнорируем
+        logging.debug("Не удалось редактировать текст исходного сообщения (возможно оно удалено).")
 
     return ConversationHandler.END

@@ -6,11 +6,8 @@ from db.models.search_sessions import SearchSession
 from db.models.booking_types import BookingType
 from db.models.bookings import Booking
 
-from utils.logging_config import log_function_call, LogExecutionTime, get_logger
+EXCLUDED_STATUSES = [5,6,7] # Ожидает, Подтверждено, Заглушка
 
-logger = get_logger(__name__)
-
-@log_function_call(action="Search_session")
 async def get_apartments(
     check_in: datetime,
     check_out: datetime,
@@ -50,7 +47,7 @@ async def get_apartments(
                 ~exists().where(
                     and_(
                         Booking.apartment_id == Apartment.id,
-                        Booking.status_id.in_([5,6,7]),
+                        Booking.status_id.in_(EXCLUDED_STATUSES),  
                         or_(
                             and_(Booking.check_in <= check_in, Booking.check_out > check_in),
                             and_(Booking.check_in < check_out, Booking.check_out >= check_out),

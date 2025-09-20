@@ -7,17 +7,16 @@ from db.models.bookings import Booking
 from db.models.apartments import Apartment
 from db.models.users import User
 
-from utils.logging_config import log_function_call, LogExecutionTime, get_logger
 
 # Константы
 TARGET_BOOKING_STATUS = 5      # "ожидает подтверждения"
 BOOKING_STATUS_TIMEOUT = 11    # "время истекло"
 
 
-@log_function_call(action="check_expired_booking")
+
 async def check_expired_booking(context):
     """Проверка и обработка просроченных броней"""
-    logger = get_logger(__name__)
+
     bot = context.bot
 
     try:
@@ -39,25 +38,6 @@ async def check_expired_booking(context):
             result = await session.execute(stmt)
             expired_bookings = result.scalars().all()
 
-            if not expired_bookings:
-                logger.info(
-                    f"No expired bookings found for status ОЖИДАЕТ ПОДТВЕРЖДНИЯ"
-                    f"and timeout=24h",
-                    extra={"action": "check_expired_booking"}
-                )
-            else:
-                # Ограничиваем количество выводимых ID до 10, если их много
-                booking_ids = [b.id for b in expired_bookings[:10]]
-                if len(expired_bookings) > 10:
-                    booking_ids.append("...")
-                
-                logger.info(
-                    f"Found {len(expired_bookings)} expired bookings to process",
-                    extra={
-                        "action": "check_expired_booking",
-                        "booking_ids": booking_ids
-                    }
-                )
 
             for booking in expired_bookings:
                 booking.status_id = BOOKING_STATUS_TIMEOUT
@@ -67,24 +47,15 @@ async def check_expired_booking(context):
 
             # Замер времени уведомлений
             for booking in expired_bookings:
-                with LogExecutionTime(
-                    "notify_timeout",
-                    logger,
-                    user_id=booking.tg_user_id,
-                    chat_id=booking.apartment.owner.tg_user_id
-                ):
                     await notify_timeout(bot, booking)
 
     except Exception as e:
-        logger.exception(
-            f"Ошибка при обработке просроченных броней: {e}",
-            extra={"action": "check_expired_booking"}
-        )
+        pass
 
 
 async def notify_timeout(bot, booking):
     """Отправка уведомлений о том, что бронь истекла"""
-    logger = get_logger(__name__)
+
     guest_chat_id = booking.tg_user_id
     owner_chat_id = booking.apartment.owner_tg_id
     created_local = (booking.created_at + timedelta(hours=3)).replace(second=0, microsecond=0)
@@ -109,13 +80,3 @@ async def notify_timeout(bot, booking):
     await bot.send_message(chat_id=guest_chat_id, text=guest_text, parse_mode="HTML")
     await bot.send_message(chat_id=owner_chat_id, text=owner_text, parse_mode="HTML")
 
-
-    logger.info(
-        f"Timeout notifications sent for booking {booking.id}",
-        extra={
-            "action": "notify_timeout",
-            "booking_id": booking.id,
-            "guest_chat_id": guest_chat_id,
-            "owner_chat_id": owner_chat_id
-        }
-    )

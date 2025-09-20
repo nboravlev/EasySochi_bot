@@ -33,7 +33,7 @@
                 <div class="flex items-center justify-between">
                     <div>
                         <p class="text-gray-500 text-sm font-medium">Total Logs</p>
-                        <p class="text-3xl font-bold text-blue-600" id="total-logs">{{ stats.total_logs }}</p>
+                        <p class="text-3xl font-bold text-blue-600" id="total-logs">Loading...</p>
                     </div>
                     <div class="bg-blue-100 p-3 rounded-full">
                         <i class="fas fa-file-alt text-blue-600 text-xl"></i>
@@ -45,7 +45,7 @@
                 <div class="flex items-center justify-between">
                     <div>
                         <p class="text-gray-500 text-sm font-medium">Errors (24h)</p>
-                        <p class="text-3xl font-bold text-red-600" id="error-count">{{ stats.error_count }}</p>
+                        <p class="text-3xl font-bold text-red-600" id="error-count">Loading...</p>
                     </div>
                     <div class="bg-red-100 p-3 rounded-full">
                         <i class="fas fa-exclamation-triangle text-red-600 text-xl"></i>
@@ -57,7 +57,7 @@
                 <div class="flex items-center justify-between">
                     <div>
                         <p class="text-gray-500 text-sm font-medium">Active Users</p>
-                        <p class="text-3xl font-bold text-green-600" id="unique-users">{{ stats.unique_users }}</p>
+                        <p class="text-3xl font-bold text-green-600" id="unique-users">Loading...</p>
                     </div>
                     <div class="bg-green-100 p-3 rounded-full">
                         <i class="fas fa-users text-green-600 text-xl"></i>
@@ -69,7 +69,7 @@
                 <div class="flex items-center justify-between">
                     <div>
                         <p class="text-gray-500 text-sm font-medium">Avg Response Time</p>
-                        <p class="text-3xl font-bold text-purple-600" id="avg-time">{{ "%.3f"|format(stats.avg_execution_time) }}s</p>
+                        <p class="text-3xl font-bold text-purple-600" id="avg-time">Loading...</p>
                     </div>
                     <div class="bg-purple-100 p-3 rounded-full">
                         <i class="fas fa-clock text-purple-600 text-xl"></i>
@@ -121,10 +121,16 @@
                 const response = await fetch('/api/stats');
                 const stats = await response.json();
                 
+                // Update stat cards first
+                document.getElementById('total-logs').textContent = stats.total_logs || 0;
+                document.getElementById('error-count').textContent = stats.error_count || 0;
+                document.getElementById('unique-users').textContent = stats.unique_users || 0;
+                document.getElementById('avg-time').textContent = `${(stats.avg_execution_time || 0).toFixed(3)}s`;
+                
                 const levelCtx = document.getElementById('levelChart').getContext('2d');
                 const actionsCtx = document.getElementById('actionsChart').getContext('2d');
 
-                // Log Levels Chart
+                // Log Levels Chart - Use level_distribution from your API
                 levelChart = new Chart(levelCtx, {
                     type: 'doughnut',
                     data: {
@@ -150,7 +156,7 @@
                     }
                 });
 
-                // Top Actions Chart
+                // Top Actions Chart - Use top_actions from your API
                 actionsChart = new Chart(actionsCtx, {
                     type: 'bar',
                     data: {
@@ -178,6 +184,11 @@
                 
             } catch (error) {
                 console.error('Failed to initialize charts:', error);
+                // Set error state in UI
+                document.getElementById('total-logs').textContent = 'Error';
+                document.getElementById('error-count').textContent = 'Error';
+                document.getElementById('unique-users').textContent = 'Error';
+                document.getElementById('avg-time').textContent = 'Error';
             }
         }
 
@@ -189,7 +200,7 @@
                 
                 const container = document.getElementById('recent-errors');
                 
-                if (data.logs.length === 0) {
+                if (!data.logs || data.logs.length === 0) {
                     container.innerHTML = '<div class="text-green-600 text-center py-4"><i class="fas fa-check-circle mr-2"></i>No errors in the last 24 hours!</div>';
                     return;
                 }
@@ -203,7 +214,7 @@
                                     <span class="mr-4"><i class="fas fa-clock mr-1"></i>${new Date(log.timestamp).toLocaleString()}</span>
                                     ${log.user_id ? `<span class="mr-4"><i class="fas fa-user mr-1"></i>User: ${log.user_id}</span>` : ''}
                                     ${log.action ? `<span class="mr-4"><i class="fas fa-cog mr-1"></i>${log.action}</span>` : ''}
-                                    <span><i class="fas fa-code mr-1"></i>${log.function}:${log.line}</span>
+                                    ${log.function ? `<span><i class="fas fa-code mr-1"></i>${log.function}${log.line ? ':' + log.line : ''}</span>` : ''}
                                 </div>
                             </div>
                             <button onclick="showErrorDetails('${log.timestamp}')" class="text-red-600 hover:text-red-800">
@@ -234,10 +245,10 @@
                 const stats = await response.json();
                 
                 // Update stat cards
-                document.getElementById('total-logs').textContent = stats.total_logs;
-                document.getElementById('error-count').textContent = stats.error_count;
-                document.getElementById('unique-users').textContent = stats.unique_users;
-                document.getElementById('avg-time').textContent = `${stats.avg_execution_time.toFixed(3)}s`;
+                document.getElementById('total-logs').textContent = stats.total_logs || 0;
+                document.getElementById('error-count').textContent = stats.error_count || 0;
+                document.getElementById('unique-users').textContent = stats.unique_users || 0;
+                document.getElementById('avg-time').textContent = `${(stats.avg_execution_time || 0).toFixed(3)}s`;
                 
                 // Update charts if they exist
                 if (levelChart && stats.level_distribution) {
@@ -266,13 +277,6 @@
             initializeCharts();
             loadRecentErrors();
         });
-
-        // Real-time updates using Server-Sent Events (if you want to implement it)
-        // const eventSource = new EventSource('/api/stream');
-        // eventSource.onmessage = function(event) {
-        //     const data = JSON.parse(event.data);
-        //     // Update UI with real-time data
-        // };
     </script>
 </body>
 </html>

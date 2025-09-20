@@ -6,18 +6,14 @@ from db.models.bookings import Booking
 from db.models.apartments import Apartment
 from db.models.users import User
 
-from utils.logging_config import log_function_call, LogExecutionTime, get_logger
-
-
 # Константы
 TARGET_BOOKING_STATUS = 6      # "подтверждено"
 BOOKING_STATUS_TIMEOUT = 12    # "завершено"
 
 
-@log_function_call(action="check_complit_booking")
 async def check_complit_booking(context):
     """Проверка и обработка завершенных броней"""
-    logger = get_logger(__name__)
+
     bot = context.bot
 
     try:
@@ -39,13 +35,6 @@ async def check_complit_booking(context):
             result = await session.execute(stmt)
             complit_bookings = result.scalars().all()
 
-            logger.info(
-                f"Found {len(complit_bookings)} complit bookings to process",
-                extra={
-                    "action": "check_complit_booking",
-                    "booking_ids": [b.id for b in complit_bookings]
-                }
-            )
 
             for booking in complit_bookings:
                 booking.status_id = BOOKING_STATUS_TIMEOUT
@@ -53,12 +42,12 @@ async def check_complit_booking(context):
                 await notify_complit_booking(bot, booking)
 
     except Exception as e:
-        logger.exception(f"Ошибка при обработке завершенных броней: {e}")
+        pass
 
 
 async def notify_complit_booking(bot, booking):
     """Отправка уведомлений о том, что бронирование завершно"""
-    logger = get_logger(__name__)
+
     guest_chat_id = booking.tg_user_id
     owner_chat_id = booking.apartment.owner_tg_id
     
@@ -81,12 +70,3 @@ async def notify_complit_booking(bot, booking):
     await bot.send_message(chat_id=guest_chat_id, text=guest_text, parse_mode="HTML")
     await bot.send_message(chat_id=owner_chat_id, text=owner_text, parse_mode="HTML")
 
-    logger.info(
-        f"Booking complit notifications sent for booking {booking.id}",
-        extra={
-            "action": "notify_timeout",
-            "booking_id": booking.id,
-            "guest_chat_id": guest_chat_id,
-            "owner_chat_id": owner_chat_id
-        }
-    )

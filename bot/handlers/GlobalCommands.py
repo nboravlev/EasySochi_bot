@@ -1,11 +1,8 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ForceReply
 from telegram.ext import ContextTypes, ConversationHandler, ApplicationHandlerStop, CallbackQueryHandler
 
-from utils.logging_config import log_function_call, LogExecutionTime, get_logger
 
 import os
-
-logger = get_logger(__name__)
 
 
     

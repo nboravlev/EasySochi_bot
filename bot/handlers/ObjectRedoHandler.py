@@ -9,11 +9,7 @@ from telegram import Update
 
 from datetime import datetime
 
-from utils.logging_config import log_function_call, LogExecutionTime, get_logger
 
-logger = get_logger(__name__)
-
-@log_function_call(action="redo_oblect")
 async def redo_apartment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     apartment_id = int(update.callback_query.data.split("_")[-1])
     async with get_async_session() as session:

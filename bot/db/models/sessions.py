@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, BIGINT, Boolean, DateTime, Text, ForeignKey, text
 from geoalchemy2 import Geometry
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import JSONB
 from datetime import datetime
 from db.db import Base
 
@@ -16,7 +17,7 @@ class Session(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=True)
     finished_at = Column(DateTime, default=datetime.utcnow, nullable=True)
-    last_action = Column(Text, nullable=True)  # последнее действие пользователя (опционально)
+    last_action = Column(JSONB, nullable=True)  # последнее действие пользователя (опционально)
     # Географическая точка — широта/долгота
     location = Column(Geometry(geometry_type='POINT', srid=4326), nullable=True)
     is_active = Column(Boolean, nullable=False, server_default=text("true"))

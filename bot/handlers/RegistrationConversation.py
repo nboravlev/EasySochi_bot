@@ -36,13 +36,25 @@ from utils.owner_objects_request_from_menu import prepare_owner_objects_cards
 from utils.renter_bookings_request_from_menu import prepare_renter_bookings_cards
 from utils.owner_orders_request_from_menu import prepare_owner_orders_cards
 from utils.escape import safe_html
+from utils.keyboard_builder import build_calendar, CB_NAV, CB_SELECT
+from utils.message_tricks import add_message_to_cleanup, cleanup_messages, send_message
+#from utils.delete_apartment import delete_apartment
 
-from utils.logging_config import log_function_call, LogExecutionTime, get_logger
+# Updated logging imports
+from utils.logging_config import (
+    structured_logger, 
+    log_db_select, 
+    log_db_insert, 
+    log_db_update,
+    log_db_delete,
+    LoggingContext,
+    monitor_performance
+)
+
 
 from dotenv import load_dotenv
 import os
 
-logger = get_logger(__name__)
 
 # === Роли ===
 ROLE_MAP = {
@@ -65,304 +77,567 @@ WELCOME_TEXT = (
 NAME_REQUEST, ASK_PHONE, MAIN_MENU, VIEW_BOOKINGS, VIEW_OBJECTS, VIEW_ORDERS = range(6)
 
 
+
 def chunk_buttons(buttons, n=2):
     """Group buttons into rows of n buttons each"""
     return [buttons[i:i+n] for i in range(0, len(buttons), n)]
 
 
-@log_function_call(action="user_start_command")
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await cleanup_messages(context)
     """Entry point - check if user exists and route accordingly"""
     user_id = update.effective_user.id if update.effective_user else None
-    start_logger = get_logger(__name__, user_id=user_id)
+       # Use LoggingContext for manual logging of business logic
+    with LoggingContext("user_start_command", user_id=user_id, 
+                       command="start", update_type="telegram") as log_ctx:
     
-    try:
-        tg_user = update.effective_user
-        
-        # Check if user already exists
-        user = await get_user_by_tg_id(tg_user.id)
-        
-        if user is None:
-            # New user - start registration
-            start_logger.info(f"New user {tg_user.id} starting registration")
-            return await begin_registration(update, context, tg_user)
-        else:
-            # Existing user - show main menu
-            start_logger.info(f"Existing user {tg_user.id} accessing main menu")
-            return await show_main_menu(update, context, user)
+        try:
+            tg_user = update.effective_user
+
+                       # Log user interaction details
+            structured_logger.info(
+                "User initiated /start command",
+                user_id=user_id,
+                action="telegram_start_command",
+                context={
+                    'username': tg_user.username,
+                    'first_name': tg_user.first_name,
+                    'language_code': tg_user.language_code,
+                    'is_bot': tg_user.is_bot
+                }
+            )
             
-    except Exception as e:
-        start_logger.error(
-            f"Error in start handler: {str(e)}",
-            extra={
-                'action': 'start_error',
-                'user_id': user_id,
-                'error_type': type(e).__name__
-            },
-            exc_info=True
-        )
-        await update.message.reply_text(
-            "Произошла ошибка. Попробуйте позже или обратитесь в поддержку."
-        )
-        return ConversationHandler.END
+            # Check if user already exists
+            user = await get_user_by_tg_id(tg_user.id)
+            
+            if user is None:
+                # New user - start registration
+                structured_logger.info(
+                    "New user starting registration process",
+                    user_id=user_id,
+                    action="registration_start",
+                    context={'tg_username': tg_user.username}
+                )
+                return await begin_registration(update, context, tg_user)
+            else:
+                # Existing user - show main menu
+                structured_logger.info(
+                    "Existing user accessing main menu",
+                    user_id=user_id,
+                    action="main_menu_access",
+                    context={
+                        'user_db_id': user.id,
+                        'user_name': user.firstname,
+                        'last_login': user.updated_at.isoformat() if user.updated_at else None
+                    }
+                )
+                return await show_main_menu(update, context, user)
+                
+        except Exception as e:
+                # LoggingContext will automatically log the error with full context
+                structured_logger.error(
+                    f"Critical error in start handler: {str(e)}",
+                    user_id=user_id,
+                    action="start_command_error",
+                    exception=e,
+                    context={
+                        'tg_user_id': user_id,
+                        'error_type': type(e).__name__
+                    }
+                )
+                await update.message.reply_text(
+                    "Произошла ошибка. Попробуйте позже или обратитесь в поддержку."
+                )
+                return ConversationHandler.END
 
 
 async def begin_registration(update: Update, context: ContextTypes.DEFAULT_TYPE, tg_user):
     """Start registration process for new users"""
-    try:
-        # Store user data for registration process
-        context.user_data.update({
-            "tg_user": tg_user,
-            "registration_step": "name"
-        })
-        
-        # Send welcome message
-        with open(WELCOME_PHOTO_URL, "rb") as f:
-            await update.message.reply_photo(
-                photo=f,
-                caption=f"{WELCOME_TEXT}\n\n🎯 Если вы впервые у нас, пройдите короткую регистрацию."
+    user_id = tg_user.id
+
+    with LoggingContext("registration_flow", user_id=user_id, 
+                    step="begin", process="user_registration") as log_ctx:
+        try:
+            # Store user data for registration process
+            context.user_data.update({
+                "tg_user": tg_user,
+                "registration_step": "name"
+            })
+            structured_logger.info(
+                "Registration process initiated",
+                user_id=user_id,
+                action="registration_begin",
+                context={
+                    'tg_username': tg_user.username,
+                    'tg_first_name': tg_user.first_name,
+                    'has_profile_photo': tg_user.has_profile_photo if hasattr(tg_user, 'has_profile_photo') else None
+                }
             )
-        
-        # Ask for first name - with option to use Telegram name
-        keyboard = [[KeyboardButton("Использовать никнейм из ТГ")]]
-        await update.message.reply_text(
-            "Как мы можем к вам обращаться? Напишите ваше имя или выберите вариант ниже:",
-            reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-        )
-        return NAME_REQUEST
-        
-    except Exception as e:
-        logger.error(f"Error in begin_registration: {e}")
-        await update.message.reply_text("Ошибка при начале регистрации.")
-        return ConversationHandler.END
+            try:
+            # Send welcome message
+                with open(WELCOME_PHOTO_URL, "rb") as f:
+                    await update.message.reply_photo(
+                        photo=f,
+                        caption=f"{WELCOME_TEXT}\n\n🎯 Если вы впервые у нас, пройдите короткую регистрацию."
+                    )
+                structured_logger.debug(
+                    "Welcome photo sent successfully",
+                    user_id=user_id,
+                    action="welcome_photo_sent"
+                )
+            except FileNotFoundError as e:
+                structured_logger.warning(
+                    f"Welcome photo not found: {WELCOME_PHOTO_URL}",
+                    user_id=user_id,
+                    action="welcome_photo_missing",
+                    exception=e
+                )
+                await update.message.reply_text(f"{WELCOME_TEXT}\n\n🎯 Если вы впервые у нас, пройдите короткую регистрацию.")
+                
+            # Ask for first name - with option to use Telegram name
+            keyboard = [[KeyboardButton("Использовать никнейм из ТГ")]]
+            await update.message.reply_text(
+                "Как мы можем к вам обращаться? Напишите ваше имя или выберите вариант ниже:",
+                reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+            )
+            return NAME_REQUEST
+            
+        except Exception as e:
+            structured_logger.error(
+                f"Error in begin_registration: {str(e)}",
+                user_id=user_id,
+                action="registration_begin_error",
+                exception=e
+            )
+            await update.message.reply_text("Ошибка при начале регистрации.")
+            return ConversationHandler.END
     
 async def handle_name_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
+    """Handle name input during registration"""
     tg_user = context.user_data.get("tg_user")
-
-    first_name = update.message.text.strip()
-    if not first_name or first_name.lower() == "использовать никнейм из тг":
-        first_name = tg_user.first_name.strip()
-    else:
-        first_name = safe_html(first_name)
-
-    context.user_data["first_name"] = first_name
-
-    keyboard = [
-            [KeyboardButton("📞 Отправить номер телефона", request_contact=True)],
-            ["Пропустить"]
-        ]
-    await update.message.reply_text(
-            f"Приятно познакомиться, {first_name}!\n\n"
-            "Пожалуйста, поделитесь номером телефона для лучшего сервиса "
-            "(или нажмите 'Пропустить'):",
-            reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-        )
+    user_id = tg_user.id if tg_user else None
     
-    return ASK_PHONE
+    with LoggingContext("registration_name_step", user_id=user_id) as log_ctx:
+        try:
+            first_name = update.message.text.strip()
+            original_input = first_name
+            
+            if not first_name or first_name.lower() == "использовать никнейм из тг":
+                first_name = tg_user.first_name.strip()
+                name_source = "telegram_profile"
+            else:
+                first_name = safe_html(first_name)
+                name_source = "user_input"
 
+            context.user_data["first_name"] = first_name
+            
+            structured_logger.info(
+                "User name collected during registration",
+                user_id=user_id,
+                action="registration_name_collected",
+                context={
+                    'name_source': name_source,
+                    'name_length': len(first_name),
+                    'original_input': original_input[:50],  # Limit for privacy
+                    'sanitized_name': first_name[:50]
+                }
+            )
+
+            keyboard = [
+                [KeyboardButton("📞 Отправить номер телефона", request_contact=True)],
+                ["Пропустить"]
+            ]
+            await update.message.reply_text(
+                f"Приятно познакомиться, {first_name}!\n\n"
+                "Пожалуйста, поделитесь номером телефона для лучшего сервиса "
+                "(или нажмите 'Пропустить'):",
+                reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+            )
+            
+            return ASK_PHONE
+            
+        except Exception as e:
+            structured_logger.error(
+                f"Error in handle_name_request: {str(e)}",
+                user_id=user_id,
+                action="registration_name_error",
+                exception=e
+            )
+            await update.message.reply_text("Ошибка при обработке имени.")
+            return ConversationHandler.END
+        
 async def handle_phone_registration(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle phone number during registration"""
-    try:
-        phone = None
-        
-        if update.message.contact:
-            phone = update.message.contact.phone_number
-        elif update.message.text == "Пропустить":
+    tg_user = context.user_data.get("tg_user")
+    user_id = tg_user.id if tg_user else None
+    
+    with LoggingContext("registration_phone_step", user_id=user_id) as log_ctx:
+        try:
             phone = None
-        else:
-            await update.message.reply_text("Пожалуйста, нажмите кнопку отправки телефона или 'Пропустить':")
-            return ASK_PHONE
+            phone_source = None
+            
+            if update.message.contact:
+                phone = update.message.contact.phone_number
+                phone_source = "telegram_contact"
+                structured_logger.info(
+                    "Phone number provided via Telegram contact",
+                    user_id=user_id,
+                    action="phone_via_contact",
+                    context={'phone_country_code': phone[:3] if phone else None}
+                )
+            elif update.message.text == "Пропустить":
+                phone = None
+                phone_source = "skipped"
+                structured_logger.info(
+                    "User skipped phone number entry",
+                    user_id=user_id,
+                    action="phone_skipped"
+                )
+            else:
+                await update.message.reply_text("Пожалуйста, нажмите кнопку отправки телефона или 'Пропустить':")
+                return ASK_PHONE
 
-        # Complete user registration
-        tg_user = context.user_data.get("tg_user")
-        first_name = context.user_data.get("first_name")
-        
-        user = await create_user(tg_user, first_name, phone)
-        
-        await update.message.reply_text(
-            f"✅ Регистрация завершена!\n"
-            f"{'Номер телефона сохранён.' if phone else 'Регистрация без номера телефона.'}",
-            reply_markup=ReplyKeyboardRemove()
-        )
-        
-        # Show main menu
-        return await show_main_menu(update, context, user)
-        
-    except Exception as e:
-        logger.error(f"Error in handle_phone_registration: {e}")
-        await update.message.reply_text("Ошибка при сохранении данных.")
-        return ConversationHandler.END
+            # Complete user registration
+            first_name = context.user_data.get("first_name")
+            registration_start = context.user_data.get("registration_start_time")
+            
+            # Calculate registration duration
+            if registration_start:
+                start_time = datetime.fromisoformat(registration_start)
+                duration = (datetime.utcnow() - start_time).total_seconds()
+            else:
+                duration = None
+            
+            structured_logger.info(
+                "Starting user creation in database",
+                user_id=user_id,
+                action="user_creation_start",
+                context={
+                    'has_phone': phone is not None,
+                    'phone_source': phone_source,
+                    'registration_duration': duration
+                }
+            )
+            
+            # This function should have @log_db_insert decorator
+            user = await create_user(tg_user, first_name, phone)
+            
+            # Log successful registration
+            structured_logger.info(
+                "User registration completed successfully",
+                user_id=user_id,
+                action="registration_completed",
+                context={
+                    'new_user_db_id': user.id,
+                    'user_name': user.firstname,
+                    'has_phone': user.phone is not None,
+                    'registration_duration': duration,
+                    'total_users_count': None  # Could add a count query here
+                }
+            )
+            
+            await update.message.reply_text(
+                f"✅ Регистрация завершена!\n"
+                f"{'Номер телефона сохранён.' if phone else 'Регистрация без номера телефона.'}",
+                reply_markup=ReplyKeyboardRemove()
+            )
+            
+            # Show main menu
+            return await show_main_menu(update, context, user)
+            
+        except Exception as e:
+            structured_logger.error(
+                f"Error in handle_phone_registration: {str(e)}",
+                user_id=user_id,
+                action="registration_phone_error",
+                exception=e,
+                context={
+                    'phone_provided': update.message.contact is not None,
+                    'message_text': update.message.text[:50] if update.message.text else None
+                }
+            )
+            await update.message.reply_text("Ошибка при сохранении данных.")
+            return ConversationHandler.END
 
 
+@monitor_performance(threshold=1.0)  # Log if menu generation takes > 1 second
 async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, user):
     """Show main menu with role options"""
-    try:
-        # Store user data for the session
-        context.user_data.update({
-            "user_id": user.id,
-            "tg_user_id": user.tg_user_id
-        })
-        
-        # Create menu buttons
-        all_buttons = list(ROLE_MAP.keys())
-        keyboard = chunk_buttons(all_buttons, n=2)
-        
-        reply_markup = ReplyKeyboardMarkup(
-            keyboard,
-            one_time_keyboard=True,
-            resize_keyboard=True
-        )
-        
-        welcome_back_msg = f"👋 Добро пожаловать, {user.firstname or 'пользователь'}!\n\nВыберите действие:"
-        
-        if hasattr(update, 'message') and update.message:
-            await update.message.reply_text(welcome_back_msg, reply_markup=reply_markup)
-        elif hasattr(update, 'callback_query') and update.callback_query:
-            await update.callback_query.answer()
-            await update.callback_query.message.reply_text(welcome_back_msg, reply_markup=reply_markup)
-        else:
-            await update.effective_chat.send_message(welcome_back_msg, reply_markup=reply_markup)
-        return MAIN_MENU
-        
-    except Exception as e:
-        logger.error(f"Error in show_main_menu: {e}")
-        await update.message.reply_text("Ошибка при показе главного меню.")
-        return ConversationHandler.END
-
+    user_id = user.tg_user_id
+    
+    with LoggingContext("main_menu_display", user_id=user_id, 
+                       user_db_id=user.id) as log_ctx:
+        try:
+            # Store user data for the session
+            context.user_data.update({
+                "user_id": user.id,
+                "tg_user_id": user.tg_user_id
+            })
+            
+            structured_logger.info(
+                "Displaying main menu to user",
+                user_id=user_id,
+                action="main_menu_shown",
+                context={
+                    'user_db_id': user.id,
+                    'user_name': user.firstname,
+                    'available_roles': list(ROLE_MAP.keys()),
+                    'menu_options_count': len(ROLE_MAP)
+                }
+            )
+            
+            # Create menu buttons
+            all_buttons = list(ROLE_MAP.keys())
+            keyboard = chunk_buttons(all_buttons, n=2)
+            
+            reply_markup = ReplyKeyboardMarkup(
+                keyboard,
+                one_time_keyboard=True,
+                resize_keyboard=True
+            )
+            
+            welcome_back_msg = f"👋 Добро пожаловать, {user.firstname or 'пользователь'}!\n\nВыберите действие:"
+            
+            if hasattr(update, 'message') and update.message:
+                msg = await update.message.reply_text(welcome_back_msg, reply_markup=reply_markup)
+            elif hasattr(update, 'callback_query') and update.callback_query:
+                await update.callback_query.answer()
+                msg = await update.callback_query.message.reply_text(welcome_back_msg, reply_markup=reply_markup)
+            else:
+                msg = await update.effective_chat.send_message(welcome_back_msg, reply_markup=reply_markup)
+            await add_message_to_cleanup(context,msg.chat_id,msg.message_id)
+            
+            return MAIN_MENU
+            
+        except Exception as e:
+            structured_logger.error(
+                f"Error in show_main_menu: {str(e)}",
+                user_id=user_id,
+                action="main_menu_error",
+                exception=e,
+                context={'user_db_id': user.id}
+            )
+            await update.message.reply_text("Ошибка при показе главного меню.")
+            return ConversationHandler.END
 
 async def handle_menu_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle user's menu choice and create appropriate session"""
-    try:
-        user_choice = update.message.text
-        tg_user_id = context.user_data.get("tg_user_id")
-        
-        if user_choice not in ROLE_MAP:
-            await update.message.reply_text("Пожалуйста, выберите из предложенных вариантов.")
-            return MAIN_MENU
-        
-        role_id = ROLE_MAP[user_choice]
-        
-        # Create session with selected role
-        session = await create_session(tg_user_id, role_id)
-        
-        # Store session info
-        context.user_data.update({
-            "session_id": session.id,
-            "role_id": role_id
-        })
-        
-        # Route based on role
-        return await route_by_role(update, context, role_id)
-        
-    except Exception as e:
-        logger.error(f"Error in handle_menu_choice: {e}")
-        await update.message.reply_text("Произошла ошибка при обработке выбора.")
-        return ConversationHandler.END
-
+    user_choice = update.message.text
+    tg_user_id = context.user_data.get("tg_user_id")
+    user_db_id = context.user_data.get("user_id")
+    
+    with LoggingContext("menu_choice_processing", user_id=tg_user_id,
+                       user_db_id=user_db_id, choice=user_choice) as log_ctx:
+        try:
+            if user_choice not in ROLE_MAP:
+                structured_logger.warning(
+                    f"Invalid menu choice: {user_choice}",
+                    user_id=tg_user_id,
+                    action="invalid_menu_choice",
+                    context={
+                        'invalid_choice': user_choice,
+                        'valid_options': list(ROLE_MAP.keys())
+                    }
+                )
+                await update.message.reply_text("Пожалуйста, выберите из предложенных вариантов.")
+                return MAIN_MENU
+            
+            role_id = ROLE_MAP[user_choice]
+            
+            structured_logger.info(
+                f"User selected menu option: {user_choice}",
+                user_id=tg_user_id,
+                action="menu_choice_made",
+                context={
+                    'choice': user_choice,
+                    'role_id': role_id,
+                    'user_db_id': user_db_id
+                }
+            )
+            
+            # Create session with selected role (this should have @log_db_insert)
+            session = await create_session(tg_user_id, role_id)
+            
+            # Store session info
+            context.user_data.update({
+                "session_id": session.id,
+                "role_id": role_id
+            })
+            
+            structured_logger.info(
+                "User session created successfully",
+                user_id=tg_user_id,
+                action="session_created",
+                context={
+                    'session_id': session.id,
+                    'role_id': role_id,
+                    'role_name': user_choice
+                }
+            )
+            
+            # Route based on role
+            return await route_by_role(update, context, role_id)
+            
+        except Exception as e:
+            structured_logger.error(
+                f"Error in handle_menu_choice: {str(e)}",
+                user_id=tg_user_id,
+                action="menu_choice_error",
+                exception=e,
+                context={
+                    'user_choice': user_choice,
+                    'user_db_id': user_db_id
+                }
+            )
+            await update.message.reply_text("Произошла ошибка при обработке выбора.")
+            return ConversationHandler.END
 
 async def route_by_role(update: Update, context: ContextTypes.DEFAULT_TYPE, role_id: int):
     """Route user to appropriate flow based on selected role"""
-    try:
-        await update.message.reply_text("Обрабатываю ваш запрос...", reply_markup=ReplyKeyboardRemove())
-        
-        if role_id == 1:  # tenant - search for property
-            keyboard = [[InlineKeyboardButton("🔍 Начать поиск жилья", callback_data="start_search")]]
-            prompt = "🏡 Готов помочь найти аренду в Сочи!"
+    tg_user_id = context.user_data.get("tg_user_id")
+    session_id = context.user_data.get("session_id")
+    
+    with LoggingContext("role_routing", user_id=tg_user_id, 
+                       role_id=role_id, session_id=session_id) as log_ctx:
+        try:
+            msg = await update.message.reply_text("Обрабатываю ваш запрос...", reply_markup=ReplyKeyboardRemove())
+            await add_message_to_cleanup(context, msg.chat_id, msg.message_id)
+            if role_id == 1:  # tenant - search for property
+                keyboard = [[InlineKeyboardButton("🔍 Начать поиск жилья", callback_data="start_search")]]
+                prompt = "🏡 Готов помочь найти аренду в Сочи!"
+                next_action = "property_search"
+                
+            elif role_id == 2:  # owner - add property  
+                keyboard = [[InlineKeyboardButton("➕ Добавить объект", callback_data="add_object")]]
+                prompt = "🏠 Готов помочь сдать вашу недвижимость!"
+                next_action = "property_add"
+                
+            elif role_id == 4:  # user bookings
+                structured_logger.info(
+                    "Routing to renter bookings view",
+                    user_id=tg_user_id,
+                    action="route_to_bookings",
+                    context={'session_id': session_id}
+                )
+                await select_renter_bookings(update, context)
+                return VIEW_BOOKINGS
+                
+            elif role_id == 5:  # owner objects
+                structured_logger.info(
+                    "Routing to owner objects view",
+                    user_id=tg_user_id,
+                    action="route_to_objects",
+                    context={'session_id': session_id}
+                )
+                await select_owner_objects(update, context)  
+                return VIEW_OBJECTS
+            else:
+                structured_logger.warning(
+                    f"Unknown role_id: {role_id}",
+                    user_id=tg_user_id,
+                    action="unknown_role_error",
+                    context={'role_id': role_id, 'session_id': session_id}
+                )
+                await update.message.reply_text("⚠️ Неизвестная ошибка. Начните заново /start")
+                return ConversationHandler.END
+
+            # Log successful routing for inline keyboard options
+            structured_logger.info(
+                f"User routed to {next_action} flow",
+                user_id=tg_user_id,
+                action=f"route_to_{next_action}",
+                context={
+                    'role_id': role_id,
+                    'session_id': session_id,
+                    'next_step': next_action
+                }
+            )
+
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(prompt, reply_markup=reply_markup)
             
-        elif role_id == 2:  # owner - add property  
-            keyboard = [[InlineKeyboardButton("➕ Добавить объект", callback_data="add_object")]]
-            prompt = "🏠 Готов помочь сдать вашу недвижимость!"
-            
-        elif role_id == 4:  # user bookings
-            await select_renter_bookings(update, context)
-            return VIEW_BOOKINGS  # or appropriate state
-            
-        elif role_id == 5:  # owner objects
-            await select_owner_objects(update, context)  
-            return VIEW_OBJECTS  # or appropriate state
-            
-        else:
-            await update.message.reply_text("⚠️ Неизвестная ошибка. Начните заново /start")
             return ConversationHandler.END
 
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text(prompt, reply_markup=reply_markup)
-        
-        return ConversationHandler.END
-
-    except Exception as e:
-        logger.error(f"Error in route_by_role: {e}")
-        await update.message.reply_text("❗ Произошла ошибка при перенаправлении.")
-        return ConversationHandler.END
+        except Exception as e:
+            structured_logger.error(
+                f"Error in route_by_role: {str(e)}",
+                user_id=tg_user_id,
+                action="role_routing_error",
+                exception=e,
+                context={'role_id': role_id, 'session_id': session_id}
+            )
+            await update.message.reply_text("❗ Произошла ошибка при перенаправлении.")
+            return ConversationHandler.END
     
 #==== Показ объектов лендлорду ===
-async def select_owner_objects (update: Update, context: ContextTypes.DEFAULT_TYPE):
+@log_db_select(log_slow_only=True, slow_threshold=0.2)
+async def select_owner_objects(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Select owner objects with comprehensive logging"""
     tg_user_id = update.effective_user.id
-    async with get_async_session() as session:
-        # Получаем активные объекты владельца
-        result_apts = await session.execute(
-            select(Apartment).options(selectinload(Apartment.booking))
-            .where(
-                Apartment.owner_tg_id == tg_user_id,
-                Apartment.is_active == True,
-                Apartment.is_draft == False
-    )
-            .order_by(desc(Apartment.updated_at))
+    with LoggingContext("owner_objects_query", user_id=tg_user_id) as log_ctx:
+        async with get_async_session() as session:
+            # This database query will be automatically logged if slow
+            result_apts = await session.execute(
+                select(Apartment).options(selectinload(Apartment.booking))
+                .where(
+                    Apartment.owner_tg_id == tg_user_id,
+                    Apartment.is_active == True,
+                    Apartment.is_draft == False
+                )
+                .order_by(desc(Apartment.updated_at))
+            )
+            apartments = result_apts.scalars().all()
+
+        structured_logger.info(
+            f"Owner objects query completed: {len(apartments)} apartments found",
+            user_id=tg_user_id,
+            action="owner_objects_loaded",
+            context={
+                'apartments_count': len(apartments),
+                'has_apartments': len(apartments) > 0
+            }
         )
-        apartments = result_apts.scalars().all()
 
-    if not apartments:
-        await update.message.reply_text("🏢 У вас нет активных объектов.")
-        return MAIN_MENU
-    
-    context.user_data["owner_objects"] = apartments
-    await send_message(update, f"🔍Найдено ваших объектов: {len(apartments)}")
-
-    await show_owner_objects(update,context)
-    return VIEW_OBJECTS
+        if not apartments:
+            structured_logger.info(
+                "No active apartments found for owner",
+                user_id=tg_user_id,
+                action="no_owner_objects",
+            )
+            await update.message.reply_text("🏢 У вас нет активных объектов.")
+            return MAIN_MENU
+        
+        context.user_data["owner_objects"] = apartments
+        msg = await send_message(update, f"🔍Найдено ваших объектов: {len(apartments)}")
+        await add_message_to_cleanup(context, msg.chat_id, msg.message_id)
+        await show_owner_objects(update, context)
+        return VIEW_OBJECTS
 
 async def show_owner_objects(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if query:
-        await query.answer()  # Обязательно!
+        await query.answer()  # ответ на callback
 
-    data = query.data if query else None
-    print("🔁 Callback получен:", data)
-    # Получаем список объектов из user_data
     apts = context.user_data.get("owner_objects", [])
     if not apts:
+        msg = "❌ Список квартир пуст."
         if query:
-            await query.edit_message_text("❌ Список квартир пуст.")
+            await query.edit_message_text(msg)
         else:
-            await update.message.reply_text("❌ Список квартир пуст.")
+            await update.message.reply_text(msg)
         return MAIN_MENU
 
-    # По умолчанию индекс 0
+    # По умолчанию показываем первую квартиру
     current_index = 0
+    data = query.data if query else None
 
-    # Парсим индекс из callback_data
-    if data:
-        if data.startswith("apt_next_") or data.startswith("apt_prev_"):
-            try:
-                current_index = int(data.split("_")[-1])
-            except (ValueError, IndexError):
-                await query.message.reply_text("Ошибка индекса. Попробуйте снова.")
-                return MAIN_MENU
-        elif data.startswith("apt_delete_"):
-            try:
-                current_apartment = int(data.split("_")[-1])
-                tg_user_id = update.effective_user.id
-                return await delete_apartment(current_apartment, tg_user_id, update, context)
-            except (ValueError, IndexError):
-                await query.message.reply_text("Ошибка индекса. Попробуйте снова.")
-                return MAIN_MENU
-        elif data.startswith("goto_"):
-            return await select_owner_orders(update, context)
-        elif data == "back_menu":
-            await start (update, context)
-            return 
-
+    if data and data.startswith(("apt_next_", "apt_prev_")):
+        try:
+            current_index = int(data.split("_")[-1])
+        except (ValueError, IndexError):
+            await query.message.reply_text("Ошибка индекса. Попробуйте снова.")
+            return MAIN_MENU
 
     # Ограничиваем индекс допустимым диапазоном
     total = len(apts)
@@ -376,12 +651,13 @@ async def show_owner_objects(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if query:
         #await query.answer()  # Обязательно!
         try:
-            await query.edit_message_text(text, reply_markup=markup, parse_mode="HTML")
+            msg = await query.edit_message_text(text, reply_markup=markup, parse_mode="HTML")
+            await add_message_to_cleanup(context, msg.chat_id, msg.message_id)
         except Exception as e:
             await query.message.reply_text("Ошибка при отображении карточки.")
     else:
-        await update.message.reply_text(text, reply_markup=markup, parse_mode="HTML")
-
+        msg = await update.message.reply_text(text, reply_markup=markup, parse_mode="HTML")
+        await add_message_to_cleanup(context, msg.chat_id, msg.message_id)
     return VIEW_OBJECTS    
 
 #=======Проваливаемся в бронирования Лендлорда=======
@@ -465,12 +741,12 @@ async def show_owner_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query:
         #await query.answer()  # Обязательно!
         try:
-            await query.edit_message_text(text, reply_markup=markup, parse_mode="HTML")
+            msg = await query.edit_message_text(text, reply_markup=markup, parse_mode="HTML")
         except Exception as e:
-            await query.message.reply_text("Ошибка при отображении карточки.")
+            msg = await query.message.reply_text("Ошибка при отображении карточки.")
     else:
-        await update.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
-
+        msg = await update.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
+    await add_message_to_cleanup(context, msg.chat_id, msg.message_id)
     return VIEW_ORDERS   
 
 #======показ бронирований Арендатору=========
@@ -501,7 +777,8 @@ async def select_renter_bookings (update: Update, context: ContextTypes.DEFAULT_
         return MAIN_MENU
     
     context.user_data["renter_bookings"] = booking_full
-    await send_message(update, f"🔍Найдено бронирований: {len(booking_full)}")
+    msg = await send_message(update, f"🔍Найдено бронирований: {len(booking_full)}")
+    await add_message_to_cleanup(context, msg.chat_id, msg.message_id)
 
     await show_renter_bookings(update,context)
     return VIEW_BOOKINGS
@@ -517,9 +794,11 @@ async def show_renter_bookings(update: Update, context: ContextTypes.DEFAULT_TYP
     bookings = context.user_data.get("renter_bookings", [])
     if not bookings:
         if query:
-            await query.edit_message_text("❌ Список бронирований пуст.")
+            msg = await query.edit_message_text("❌ Список бронирований пуст.")
+            await add_message_to_cleanup(context, msg.chat_id, msg.message_id)
         else:
-            await update.message.reply_text("❌ Список бронирований пуст.")
+            msg = await update.message.reply_text("❌ Список бронирований пуст.")
+            await add_message_to_cleanup(context, msg.chat_id, msg.message_id)
         return MAIN_MENU
 
     # По умолчанию индекс 0
@@ -547,73 +826,158 @@ async def show_renter_bookings(update: Update, context: ContextTypes.DEFAULT_TYP
     if query:
         #await query.answer()  # Обязательно!
         try:
-            await query.edit_message_text(text, reply_markup=markup, parse_mode="HTML")
+            msg = await query.edit_message_text(text, reply_markup=markup, parse_mode="HTML")
+            await add_message_to_cleanup(context, msg.chat_id, msg.message_id)
         except Exception as e:
             await query.message.reply_text("Ошибка при отображении карточки.")
     else:
-        await update.message.reply_text(text, reply_markup=markup, parse_mode="HTML")
+        msg = await update.message.reply_text(text, reply_markup=markup, parse_mode="HTML")
+        await add_message_to_cleanup(context, msg.chat_id, msg.message_id)
 
     return VIEW_BOOKINGS   
 
 
+#=======Отмена удаления====
+async def cancel_delete_apartment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
 
-# === Вспомогательная функция ===
+    try:
+        await query.delete_message()   # Полностью удаляет сообщение с кнопками
+    except Exception:
+        # fallback: если удалить нельзя, то просто убираем кнопки
+        await query.edit_message_reply_markup(reply_markup=None)
 
-async def send_message(update: Update, text: str):
-    """Универсальная отправка сообщения (поддержка Message и CallbackQuery)."""
-    if update.message:
-        await update.message.reply_text(text)
-    elif update.callback_query:
-        await update.callback_query.message.reply_text(text)     
+    return VIEW_OBJECTS
 
+#=======подтверждение удаления =======
 
-async def delete_apartment(apartment_id: int, tg_user_id: int, update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def confirm_delete_apartment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    apartment_id = int(query.data.split("_")[-1])
+
+    keyboard = [
+        [
+            InlineKeyboardButton("❌ Удалить", callback_data=f"delete_confirm_{apartment_id}"),
+            InlineKeyboardButton("↩️ Отмена", callback_data="delete_cancel")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.message.reply_text(
+        f"Вы уверены, что хотите удалить объект {apartment_id}?",
+        reply_markup=reply_markup
+    )
+    return VIEW_OBJECTS
+
+#=======подтвержждение получено ==========
+async def delete_apartment_confirmed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    apartment_id = int(query.data.split("_")[-1])
+    tg_user_id = update.effective_user.id
+
     ACTIVE_BOOKING_STATUSES = [5, 6]
-    async with get_async_session() as session:
-        # Получаем квартиру с букингами
-        result = await session.execute(
-            select(Apartment)
-            .options(selectinload(Apartment.booking))
-            .where(Apartment.id == apartment_id)
+    
+    with LoggingContext("apartment_deletion", user_id=tg_user_id, 
+                       apartment_id=apartment_id) as log_ctx:
+        
+        structured_logger.warning(
+            f"User attempting to delete apartment {apartment_id}",
+            user_id=tg_user_id,
+            action="apartment_deletion_attempt",
+            context={'apartment_id': apartment_id}
         )
-        apartment = result.scalar_one_or_none()
+        
+        async with get_async_session() as session:
+            # Check apartment and bookings
+            result = await session.execute(
+                select(Apartment)
+                .options(selectinload(Apartment.booking))
+                .where(Apartment.id == apartment_id)
+            )
+            apartment = result.scalar_one_or_none()
 
-        if not apartment:
-            await update.callback_query.message.reply_text("❌ Объект не найден.")
+            if not apartment:
+                structured_logger.warning(
+                    f"Apartment {apartment_id} not found for deletion",
+                    user_id=tg_user_id,
+                    action="apartment_not_found",
+                    context={'apartment_id': apartment_id}
+                )
+                await update.callback_query.message.reply_text("❌ Объект не найден.")
+                return VIEW_OBJECTS
+
+            # Check for active bookings
+            active_bookings = [b for b in apartment.booking if b.status_id in ACTIVE_BOOKING_STATUSES]
+            
+            if active_bookings:
+                structured_logger.warning(
+                    f"Cannot delete apartment {apartment_id} - has active bookings",
+                    user_id=tg_user_id,
+                    action="apartment_deletion_blocked",
+                    context={
+                        'apartment_id': apartment_id,
+                        'active_bookings_count': len(active_bookings),
+                        'booking_ids': [b.id for b in active_bookings]
+                    }
+                )
+                msg = await update.callback_query.message.reply_text(
+                    "🚫 На данном объекте есть активные бронирования. "
+                    "Сообщите администратору об этой ситуации. /help"
+                )
+                await add_message_to_cleanup(context, msg.chat_id, msg.message_id)
+                return VIEW_OBJECTS
+
+            # Perform soft deletion
+            await session.execute(
+                sa_update(Apartment)
+                .where(Apartment.id == apartment_id)
+                .values(
+                    is_active=False,
+                    updated_at=datetime.utcnow(),
+                    deleted_by=tg_user_id
+                )
+            )
+            await session.commit()
+
+            structured_logger.info(
+                f"Apartment {apartment_id} successfully deleted",
+                user_id=tg_user_id,
+                action="apartment_deleted",
+                context={
+                    'apartment_id': apartment_id,
+                    'apartment_title': apartment.short_address if apartment.short_address else None,
+                    'deletion_type': 'soft_delete'
+                }
+            )
+            await update.callback_query.message.edit_text("❌ Объект успешно удалён.",
+                                                            reply_markup=None)
             return VIEW_OBJECTS
-
-        # Проверка на активные бронирования
-        has_active = any(b.status_id in ACTIVE_BOOKING_STATUSES for b in apartment.booking)
-
-        if has_active:
-            await update.callback_query.message.reply_text(
-                "🚫 На данном объекте есть активные бронирования. "
-                "Сообщите администратору о вашей проблеме. /help"
-            )
-            return 
-
-        # Обновление полей
-        await session.execute(
-            sa_update(Apartment)
-            .where(Apartment.id == apartment_id)
-            .values(
-                is_active=False,
-                updated_at=datetime.utcnow(),
-                deleted_by=tg_user_id
-            )
-        )
-        await session.commit()
-
-        await update.callback_query.message.reply_text("✅ Объект успешно удалён.")
-
-
-        return VIEW_OBJECTS
+        
 
 # === Отмена ===
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Cancel conversation with logging"""
+    user_id = update.effective_user.id if update.effective_user else None
+    
+    structured_logger.info(
+        "User cancelled conversation",
+        user_id=user_id,
+        action="conversation_cancelled",
+        context={
+            'conversation_state': context.user_data.get('registration_step'),
+            'session_id': context.user_data.get('session_id')
+        }
+    )
+    
     await update.message.reply_text(
         "❌ Действие отменено. Для продолжения работы нажмите /start",
         reply_markup=ReplyKeyboardRemove()
     )
+    await cleanup_messages(context)
     context.user_data.clear()
     return ConversationHandler.END
