@@ -15,7 +15,7 @@ if not (POSTGRES_USER and POSTGRES_PASSWORD and POSTGRES_DB):
     raise RuntimeError("Postgres credentials are not set in environment variables")
 
 # Получаем строку подключения из .env
-DATABASE_URL = f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@db_test:{POSTGRES_PORT}/{POSTGRES_DB}"
+DATABASE_URL = f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@db:{POSTGRES_PORT}/{POSTGRES_DB}"
 
 
 
