@@ -9,7 +9,7 @@ from typing import AsyncGenerator
 POSTGRES_USER = os.getenv("POSTGRES_USER")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
 POSTGRES_DB = os.getenv("POSTGRES_DB")
-POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5433")
+POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
 
 if not (POSTGRES_USER and POSTGRES_PASSWORD and POSTGRES_DB):
     raise RuntimeError("Postgres credentials are not set in environment variables")
