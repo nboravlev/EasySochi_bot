@@ -18,11 +18,15 @@ export POSTGRES_PASSWORD=$(cat /run/secrets/postgres_password)
 export POSTGRES_DB=$(cat /run/secrets/postgres_db)
 export MAPBOX_TOKEN=$(cat /run/secrets/mapbox_token)
 
-export DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db_test:5433/${POSTGRES_DB}"
+export DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}"
+
+
+
+
 
 # Ждём доступности Postgres
 echo "[entrypoint] Waiting for postgres..."
-until pg_isready -h db_test -p 5433 -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do
+until pg_isready -h db -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do
   >&2 echo "[entrypoint] Postgres is unavailable - sleeping"
   sleep 1
 done
