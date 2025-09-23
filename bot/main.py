@@ -7,11 +7,14 @@ from handlers.CommitDeclineCancelBookingHandler import conv_commit_decline_cance
 from handlers.BookingChatHandler import booking_chat
 from handlers.UserSendProblemHandler import problem_handler
 from handlers.AdminReplayUserProblemHandler import admin_replay_handler
-#from handlers.UnknownComandHandler import unknown_command_handler
-from handlers.GlobalCommands import cancel_command
-from handlers.BookingChatConversation import exit_booking_chat
-from handlers.ShowInfoHandler import info_callback_handler, info_command
 from handlers.BusyCalendarHandler import busy_calendar
+from handlers.ReferralLinkHandler import referral_conversation
+#from handlers.UnknownComandHandler import unknown_command_handler
+#from handlers.GlobalCommands import global_back_to_menu
+from handlers.BookingChatConversation import exit_booking_chat
+from handlers.ShowInfoHandler import info_conversation
+
+
 
 from db_monitor import check_db
 from booking_expired_monitor import check_expired_booking
@@ -48,8 +51,9 @@ async def post_init(application: Application) -> None:
     # Настройка меню команд (синяя плашка)
     commands = [
         BotCommand("start", "🔄 Перезапустить бот"),
-        BotCommand("help", "⚠️ Помощь"),
-        BotCommand('info', "📌 Инструкция"),
+        BotCommand("invite", "💰 Реферальная программа"),
+        BotCommand("help", "⚠️ Сообщение Админу"),
+        BotCommand('info', "📌 Инструкции и Правила использования"),
         BotCommand("cancel", "⛔ Отмена")
 
     ]
@@ -81,16 +85,16 @@ def main():
     app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
 
     #глобальные обработчики
-    app.add_handler(CommandHandler("info",info_command), group=0)
-    app.add_handler(problem_handler, group=0)
+    #app.add_handler(CallbackQueryHandler(global_back_to_menu, pattern="^mainmenu$"), group=0)
+    app.add_handler(problem_handler, group=1)
     app.add_handler(admin_replay_handler,group=0)
-
+    app.add_handler(info_conversation,group=1)
+    app.add_handler(referral_conversation,group=1) #создание реферальной ссылки
     #админские обработки
-    app.add_handler(
-        CallbackQueryHandler(info_callback_handler, pattern=r"^info_"),
-        group=1
-    )
-    #app.add_handler(unknown_command_handler,group=0) #обработчик незнакомых команд
+    #app.add_handler(
+     #   CallbackQueryHandler(info_callback_handler, pattern=r"^info_"),
+     #   group=1
+    #) 
     
     # Регистрируем хендлеры
     
@@ -110,8 +114,7 @@ def main():
     
     app.add_handler(busy_calendar, group=1) #обработчик календаря занятости
 
-
-    
+   
 
 
 

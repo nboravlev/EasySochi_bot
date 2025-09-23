@@ -53,7 +53,7 @@ class Apartment(Base):
     coordinates = Column(Geometry(geometry_type='POINT', srid=4326), nullable=True)
 
     # отношения (опционально)
-    owner = relationship("User", back_populates="apartment")
+    owner = relationship("User", back_populates="apartments")
     apartment_type = relationship("ApartmentType", back_populates="apartments",lazy = "joined")
     booking = relationship("Booking", back_populates = "apartment")
     images = relationship("Image", back_populates = "apartment", lazy="selectin")

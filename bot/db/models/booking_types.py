@@ -10,4 +10,4 @@ class BookingType(Base):
     name = Column(String(50), nullable=False, unique=True)
     
     # Bidirectional relationship
-    booking = relationship("Booking", back_populates="booking_type")
+    bookings = relationship("Booking", back_populates="booking_type")

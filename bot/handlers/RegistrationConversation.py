@@ -14,6 +14,8 @@ from telegram.ext import (
     filters, 
     CallbackQueryHandler
 )
+from handlers.ShowInfoConversation import info_command
+from handlers.ReferralLinkConversation import start_invite
 
 from sqlalchemy import update as sa_update, select, desc
 from geoalchemy2.shape import from_shape
@@ -31,7 +33,7 @@ from db.models.apartments import Apartment
 from db.models.bookings import Booking
 from db.models.booking_chat import BookingChat
 
-from utils.user_session import get_user_by_tg_id, create_user, create_session
+from utils.user_session import get_user_by_tg_id, get_source_by_suffix, get_user_by_source_id, create_user, create_session
 from utils.owner_objects_request_from_menu import prepare_owner_objects_cards
 from utils.renter_bookings_request_from_menu import prepare_renter_bookings_cards
 from utils.owner_orders_request_from_menu import prepare_owner_orders_cards
@@ -64,13 +66,15 @@ ROLE_MAP = {
     "🏢 мои объекты": 5            # owner personal cabinet
 }
 
-WELCOME_PHOTO_URL = "/bot/static/images/welcome.jpg"
+WELCOME_PHOTO_URL = "/bot/static/images/welcome_.jpg"
 
 WELCOME_TEXT = (
-    "Здравствуйте, \n Я Николай Боравлев, программист и спортсмен из Сочи. Автоматизирую процессы с 2023 г.\n\n"
-    "EasySochi это платформа для сдачи в аренду и поиску недвижимости в Сочи, коммуникации пользователей и управления своими бронированиями и квартирами.\n"
-    "Моя цель - создать альтернативу дорогим агрегаторам, и за счет минимальной комиссии за пользование инструментом предложить пользователям конкурентную цену.\n"
-    "В широком смысле, это настраиваемый масштабируемый продукт для управления бизнесом в сфере услуг, аренды, проката и т.п. По вопросам разработки и внедрения для Вашего бизнеса напишите мне в раздел Помощь"
+    "Здравствуйте, \n Я Николай Боравлев, программист, спортсмен и основатель EasySochi. Автоматизирую процессы с 2023 г.\n\n"
+    "EasySochi_rent_bot это платформа для сдачи в аренду и поиску недвижимости в Сочи, коммуникации пользователей и управления своими бронированиями и квартирами.\n"
+    "Посетите блок /info чтобы ознакомиться с Инструкциями и Правилами.\n"
+    "По вопросам сотрудничества, инвестиций и работы в приложении пишите в раздел /help\n\n"
+    "💥💥ВАЖНАЯ НОВОСТЬ:💥💥\n"
+    "В блоке /invite создайте собственную реферальную ссылку и заработайте, приглашая пользователей!\n"
 )
 
 # Constants for conversation states  
@@ -88,7 +92,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await cleanup_messages(context)
     """Entry point - check if user exists and route accordingly"""
     user_id = update.effective_user.id if update.effective_user else None
-       # Use LoggingContext for manual logging of business logic
+    args = context.args  # список аргументов после /start
+    source_id = None
+    print(f"DEBUG_START_ARGUMENT: {args}")
+
     with LoggingContext("user_start_command", user_id=user_id, 
                        command="start", update_type="telegram") as log_ctx:
     
@@ -112,6 +119,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user = await get_user_by_tg_id(tg_user.id)
             
             if user is None:
+                args = context.args  # список аргументов после /start
+                source_id = None
                 # New user - start registration
                 structured_logger.info(
                     "New user starting registration process",
@@ -119,7 +128,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     action="registration_start",
                     context={'tg_username': tg_user.username}
                 )
-                return await begin_registration(update, context, tg_user)
+                if args:
+                    suffix = args[0]  # например, sochi2025
+                    source = await get_source_by_suffix(suffix)
+                    if source:
+                        source_id = source.id
+                        context.user_data["source_tg_id"] = source.tg_user_id
+                return await begin_registration(update, context, tg_user,source_id)
             else:
                 # Existing user - show main menu
                 structured_logger.info(
@@ -152,9 +167,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return ConversationHandler.END
 
 
-async def begin_registration(update: Update, context: ContextTypes.DEFAULT_TYPE, tg_user):
+async def begin_registration(update: Update, context: ContextTypes.DEFAULT_TYPE, tg_user,source_id):
     """Start registration process for new users"""
     user_id = tg_user.id
+    source_id = source_id
 
     with LoggingContext("registration_flow", user_id=user_id, 
                     step="begin", process="user_registration") as log_ctx:
@@ -162,6 +178,7 @@ async def begin_registration(update: Update, context: ContextTypes.DEFAULT_TYPE,
             # Store user data for registration process
             context.user_data.update({
                 "tg_user": tg_user,
+                "source_id": source_id,
                 "registration_step": "name"
             })
             structured_logger.info(
@@ -198,7 +215,7 @@ async def begin_registration(update: Update, context: ContextTypes.DEFAULT_TYPE,
             # Ask for first name - with option to use Telegram name
             keyboard = [[KeyboardButton("Использовать никнейм из ТГ")]]
             await update.message.reply_text(
-                "Как мы можем к вам обращаться? Напишите ваше имя или выберите вариант ниже:",
+                "Как к вам обращаться? Напишите ваше имя или выберите вариант ниже:",
                 reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
             )
             return NAME_REQUEST
@@ -271,6 +288,8 @@ async def handle_phone_registration(update: Update, context: ContextTypes.DEFAUL
     """Handle phone number during registration"""
     tg_user = context.user_data.get("tg_user")
     user_id = tg_user.id if tg_user else None
+    source_id = context.user_data.get("source_id")
+    source_tg_id = context.user_data.get("source_tg_id")
     
     with LoggingContext("registration_phone_step", user_id=user_id) as log_ctx:
         try:
@@ -321,7 +340,15 @@ async def handle_phone_registration(update: Update, context: ContextTypes.DEFAUL
             )
             
             # This function should have @log_db_insert decorator
-            user = await create_user(tg_user, first_name, phone)
+            user = await create_user(tg_user, first_name, phone,source_id)
+            # Уведомление о регистрации по рефералке
+            print(f"DEBUG_user_SOURCE_ID: {user.source_id} and source_tg_id: {source_tg_id}")
+            if (user.source_id and source_tg_id):
+                inviter = await get_user_by_source_id(user.source_id)  # нужна helper-функция
+                inviter_name = f"@{inviter.username}" if inviter and inviter.username else f"пользоватлеля ИД @{inviter.tg_user_id}"
+                await update.message.reply_text(
+                    f"🎉 Вы успешно зарегистрировались по приглашению {inviter_name}!"
+                )
             
             # Log successful registration
             structured_logger.info(
@@ -331,18 +358,19 @@ async def handle_phone_registration(update: Update, context: ContextTypes.DEFAUL
                 context={
                     'new_user_db_id': user.id,
                     'user_name': user.firstname,
-                    'has_phone': user.phone is not None,
+                    'referral': user.source_id or None,
+                    'has_phone': user.phone_number is not None,
                     'registration_duration': duration,
                     'total_users_count': None  # Could add a count query here
                 }
             )
             
-            await update.message.reply_text(
+            msg=await update.message.reply_text(
                 f"✅ Регистрация завершена!\n"
                 f"{'Номер телефона сохранён.' if phone else 'Регистрация без номера телефона.'}",
                 reply_markup=ReplyKeyboardRemove()
             )
-            
+            await add_message_to_cleanup(context,msg.chat_id,msg.message_id)
             # Show main menu
             return await show_main_menu(update, context, user)
             
@@ -362,17 +390,25 @@ async def handle_phone_registration(update: Update, context: ContextTypes.DEFAUL
 
 
 @monitor_performance(threshold=1.0)  # Log if menu generation takes > 1 second
-async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, user):
+async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, user=None):
     """Show main menu with role options"""
-    user_id = user.tg_user_id
+    if user:
+        tg_user_id = user.tg_user_id
+        user_id = user.id
+        user_name = user.firstname
+    else:
+       tg_user_id = update.effective_user.id
+       user_id = None
+       user_name = None
+       await cleanup_messages(context)
     
-    with LoggingContext("main_menu_display", user_id=user_id, 
-                       user_db_id=user.id) as log_ctx:
+    with LoggingContext("main_menu_display", tg_user_id=tg_user_id, 
+                       user_id=user_id)  as log_ctx:
         try:
             # Store user data for the session
             context.user_data.update({
-                "user_id": user.id,
-                "tg_user_id": user.tg_user_id
+                "user_id": user_id,
+                "tg_user_id": tg_user_id
             })
             
             structured_logger.info(
@@ -380,8 +416,8 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, use
                 user_id=user_id,
                 action="main_menu_shown",
                 context={
-                    'user_db_id': user.id,
-                    'user_name': user.firstname,
+                    'user_db_id': user_id,
+                    'user_name': user_name,
                     'available_roles': list(ROLE_MAP.keys()),
                     'menu_options_count': len(ROLE_MAP)
                 }
@@ -397,16 +433,16 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, use
                 resize_keyboard=True
             )
             
-            welcome_back_msg = f"👋 Добро пожаловать, {user.firstname or 'пользователь'}!\n\nВыберите действие:"
-            
-            if hasattr(update, 'message') and update.message:
-                msg = await update.message.reply_text(welcome_back_msg, reply_markup=reply_markup)
-            elif hasattr(update, 'callback_query') and update.callback_query:
+                    # текст зависит от источника
+            if update.callback_query:
                 await update.callback_query.answer()
-                msg = await update.callback_query.message.reply_text(welcome_back_msg, reply_markup=reply_markup)
+                text = "Выберите действие:"
             else:
-                msg = await update.effective_chat.send_message(welcome_back_msg, reply_markup=reply_markup)
-            await add_message_to_cleanup(context,msg.chat_id,msg.message_id)
+                text = f"👋 Добро пожаловать, {user_name or 'пользователь'}!\n\nВыберите действие:"
+
+            # всегда можно использовать effective_message
+            msg = await update.effective_message.reply_text(text, reply_markup=reply_markup)
+            await add_message_to_cleanup(context, msg.chat_id, msg.message_id)
             
             return MAIN_MENU
             
@@ -980,4 +1016,14 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await cleanup_messages(context)
     context.user_data.clear()
+    return ConversationHandler.END
+
+async def info_and_end(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Завершает диалог и вызывает info_command."""
+    await info_command(update, context)
+    return ConversationHandler.END
+
+async def invite_and_end(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Завершает диалог и вызывает info_command."""
+    await start_invite(update, context)
     return ConversationHandler.END
