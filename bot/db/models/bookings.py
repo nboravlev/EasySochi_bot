@@ -47,9 +47,9 @@ class Booking(Base):
     is_active = Column(Boolean, nullable=False, default=True, server_default=text("true"))
 
     # Optional: связи
-    user = relationship("User", back_populates="booking")
+    user = relationship("User", back_populates="bookings")
     apartment = relationship("Apartment", back_populates="booking")
-    booking_type = relationship("BookingType", back_populates="booking")
+    booking_type = relationship("BookingType", back_populates="bookings")
     booking_chat = relationship("BookingChat", back_populates = "booking")
 
     def __repr__(self):

@@ -12,7 +12,7 @@ class User(Base):
     
 
     id = Column(Integer, primary_key=True)
-    username = Column(String(50), nullable=False, unique=False)
+    username = Column(String(50), nullable=True, unique=False)
     firstname = Column(String(50), nullable=True, unique=False)
     phone_number = Column(String(20), nullable=True, unique=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -23,12 +23,17 @@ class User(Base):
     is_active = Column(Boolean, nullable=False, server_default=text("true"))
     is_bot = Column(Boolean, nullable=False, server_default=text("false"))
 
+    source_id = Column(Integer,
+    ForeignKey("public.sources.id", ondelete="SET NULL"),
+    nullable=True)
+
     # Bidirectional relationship
     sessions = relationship("Session",back_populates="user")
-    apartment = relationship("Apartment", back_populates = "owner")
-    booking = relationship("Booking", back_populates = "user")
+    apartments = relationship("Apartment", back_populates = "owner")
+    bookings = relationship("Booking", back_populates = "user")
     search_sessions = relationship("SearchSession", back_populates="user")
     booking_chat = relationship("BookingChat", back_populates="user")
+    source = relationship("Source", back_populates="users")
 
     @validates('phone_number')
     def validate_phone_number(self, key, phone_number):
