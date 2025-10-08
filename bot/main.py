@@ -13,12 +13,14 @@ from handlers.ReferralLinkHandler import referral_conversation
 #from handlers.GlobalCommands import global_back_to_menu
 from handlers.BookingChatConversation import exit_booking_chat
 from handlers.ShowInfoHandler import info_conversation
+from handlers.ShowMapConversationHandler import handle_show_map
 
 
 
 from db_monitor import check_db
 from booking_expired_monitor import check_expired_booking
 from booking_complit_monitor import check_complit_booking
+from my_daily_stats import collect_daily_stats
 
 
 import os
@@ -74,6 +76,11 @@ async def post_init(application: Application) -> None:
         check_complit_booking,
         time(hour=1, minute=19)
     )
+    application.job_queue.run_daily(
+        collect_daily_stats,
+        time=time(hour=20, minute=50, second=0),
+        name="daily_stats_job"
+    )
 
 
 def main():
@@ -88,6 +95,7 @@ def main():
     #app.add_handler(CallbackQueryHandler(global_back_to_menu, pattern="^mainmenu$"), group=0)
     app.add_handler(problem_handler, group=1)
     app.add_handler(admin_replay_handler,group=0)
+    #app.add_handler(CallbackQueryHandler(handle_show_map, pattern=r"^show_map_\d+$"), group=0)
     app.add_handler(info_conversation,group=1)
     app.add_handler(referral_conversation,group=1) #создание реферальной ссылки
     #админские обработки

@@ -14,8 +14,7 @@ from telegram.ext import (
     ContextTypes,
     filters
 )
-from telegram.error import BadRequest #временная замена моему логгеру
-import logging   #временная замена моему логгеру
+from utils.logging_config import structured_logger
 
 from datetime import datetime
 
@@ -27,7 +26,6 @@ from db.models.apartments import Apartment
 from utils.escape import safe_html
 
 from sqlalchemy import select, update as sa_update
-
 from sqlalchemy.orm import selectinload
 
 
@@ -49,8 +47,8 @@ async def booking_decline_callback(update: Update, context: ContextTypes.DEFAULT
     # ✅ Убираем inline-кнопки из исходного сообщения
     try:
         await query.edit_message_reply_markup(reply_markup=None)
-    except BadRequest as e:
-        logging.warning("Не удалось убрать клавиатуру: %s", e)
+    except Exception as e:
+        structured_logger.warning("Не удалось убрать клавиатуру: %s", e)
 
     # Запрашиваем причину
     keyboard = [[KeyboardButton("отправка причины")]]
@@ -99,17 +97,41 @@ async def booking_decline_reason(update: Update, context: ContextTypes.DEFAULT_T
                 reply_markup=ReplyKeyboardRemove(),
                 parse_mode="HTML"
             )
+            structured_logger.warning(
+                "Bad try to decline forbidden booking status",
+                user_id=booking.apartment.owner_tg_id,
+                action = "Try to decline forbidden booking status",
+                context ={
+                    'status':booking.booking_type.name,
+                    'booking_id':booking.id,
+                    'price':booking.total_price,
+                    'reason':reason}
+
+            )
             return ConversationHandler.END
           # Обновляем статус и причину
         booking.status_id = status_id
         booking.decline_reason = reason
+
         await session.commit()
 
     # Определяем инициатора
     initiator_tg_id = update.effective_user.id
     guest_tg_id = booking.tg_user_id
     owner_tg_id = booking.apartment.owner_tg_id
-
+    structured_logger.info(
+            "Reject booking",
+            user_id=initiator_tg_id,
+            action="Reject booking request",
+            context={
+                'booking_id':booking.id,
+                'reason':reason,
+                'in':booking.check_in,
+                'out':booking.check_out,
+                'price':booking.price,
+                'guest':booking.tg_user_id
+            }
+        )
     if initiator_tg_id == guest_tg_id:
         # Отмену делает гость → уведомляем владельца
         await context.bot.send_message(
@@ -211,9 +233,9 @@ async def booking_confirm_callback(update: Update, context: ContextTypes.DEFAULT
     try:
         # Это удалит клавиатуру под исходным сообщением
         await query.edit_message_reply_markup(reply_markup=None)
-    except BadRequest as e:
+    except Exception as e:
         # например: сообщение уже удалено или недоступно — логируем и продолжаем
-        logging.warning("Не удалось убрать inline-клавиатуру: %s", e)
+        structured_logger.warning("Не удалось убрать inline-клавиатуру: %s", e)
 
     # 3) (Опционально) Обновляем текст исходного owner-сообщения — без кнопок
     try:
@@ -226,8 +248,8 @@ async def booking_confirm_callback(update: Update, context: ContextTypes.DEFAULT
             parse_mode="HTML"
             # reply_markup=None  # необязательно, т.к. мы уже удалили разметку
         )
-    except BadRequest:
+    except Exception:
         # если не получилось — игнорируем
-        logging.debug("Не удалось редактировать текст исходного сообщения (возможно оно удалено).")
+        structured_logger.debug("Не удалось редактировать текст исходного сообщения (возможно оно удалено).")
 
     return ConversationHandler.END

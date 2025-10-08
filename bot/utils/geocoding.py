@@ -3,6 +3,8 @@ from typing import Optional, List, Tuple, Literal
 import httpx
 
 
+from utils.logging_config import log_api_call
+
 MAPBOX_TOKEN = os.getenv("MAPBOX_TOKEN")
 if not MAPBOX_TOKEN:
     raise ValueError("MAPBOX_TOKEN is not set in .env")
@@ -10,6 +12,8 @@ if not MAPBOX_TOKEN:
 MAPBOX_URL = "https://api.mapbox.com/geocoding/v5/mapbox.places"
 
 
+
+@log_api_call
 async def _query_mapbox(
     query: str,
     limit: int = 3,
@@ -31,7 +35,7 @@ async def _query_mapbox(
 
         return []
 
-
+@log_api_call
 async def geocode_address(address: str) -> Optional[Tuple[float, float]]:
     features = await _query_mapbox(address, limit=1, autocomplete=False)
     if features:
@@ -39,7 +43,7 @@ async def geocode_address(address: str) -> Optional[Tuple[float, float]]:
         return lat, lon
     return None
 
-
+@log_api_call
 async def autocomplete_address(query: str) -> List[dict]:
     features = await _query_mapbox(query, limit=3, autocomplete=True)
     
@@ -59,3 +63,16 @@ async def autocomplete_address(query: str) -> List[dict]:
     ]
 
 
+def parse_point(geom: str) -> Optional[Tuple[float, float]]:
+    """
+    Парсит координаты POINT(x y) из WKT и возвращает (lat, lon).
+    Возвращает None, если координаты отсутствуют или некорректны.
+    """
+    if not geom or not geom.startswith("POINT("):
+        return None
+    try:
+        coords = geom.replace("POINT(", "").replace(")", "").strip()
+        lon, lat = map(float, coords.split())
+        return lat, lon
+    except Exception:
+        return None

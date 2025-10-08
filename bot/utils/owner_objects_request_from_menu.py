@@ -50,10 +50,13 @@ def prepare_owner_objects_cards(current_apartment: Apartment, current_index: int
     
     buttons = [buttons] if buttons else []
     if books > 0:
-        buttons.append([InlineKeyboardButton("⚙️ Управление бронированиями", callback_data=f"goto_{current_apartment.id}")])
-    buttons.append([InlineKeyboardButton("❄️ Календарь занятости", callback_data=f"placeholder_{current_apartment.id}")])
-    buttons.append([InlineKeyboardButton("🔙 В меню", callback_data="back_menu"),
-                    InlineKeyboardButton("🗑 Удалить", callback_data=f"apt_delete_{current_apartment.id}")])
+        buttons.append([InlineKeyboardButton("🧑🏻‍💻 К бронированиям", callback_data=f"goto_{current_apartment.id}"),
+                        InlineKeyboardButton("Вернуться в меню➡️", callback_data="back_menu")])
+    buttons.append([InlineKeyboardButton("📅 Занято", callback_data=f"placeholder_{current_apartment.id}"),
+                    InlineKeyboardButton("🛠 Изменить", callback_data=f"apt_upgrade_{current_apartment.id}"),
+                    InlineKeyboardButton("🗑 Удалить", callback_data=f"apt_delete_{current_apartment.id}")
+                    ])
+    buttons.append([InlineKeyboardButton("📍 Посмотреть на карте", callback_data=f"owner_show_map_{current_apartment.id}")])
 
     markup = InlineKeyboardMarkup(buttons)
     
