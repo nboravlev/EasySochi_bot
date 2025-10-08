@@ -1169,7 +1169,6 @@ async def handle_show_map(update: Update, context: ContextTypes.DEFAULT_TYPE):
                            user_id = update.effective_user.id,
                            action = "Show map from menu",
                            context = {
-                               'Geo':point,
                                'Adress':apartment.short_address,
                                'source': request_source,
                                'prev_msg':previous_msg_id
