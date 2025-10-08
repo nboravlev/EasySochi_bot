@@ -29,8 +29,9 @@ def prepare_owner_orders_cards(current_booking: Booking, current_index: int, tot
         f"📅 Выезд: {current_booking.check_out.strftime('%Y-%m-%d')}\n"
         f"👥 Гостей: {current_booking.guest_count}\n"
         f"💰 Стоимость: {current_booking.total_price} ₽\n"
-        f"💼 Комиссия: {current_booking.apartment.reward}% = {commission_sum:.0f} ₽\n\n"
-        f"ℹ️ Комментарий гостя: {current_booking.comments or '—'}"
+        f"💼 Комиссия: {current_booking.apartment.reward}% = {commission_sum:.0f} ₽\n"
+        f"ℹ️ Комментарий гостя: {current_booking.comments or '—'}\n\n"
+        f"📍 {current_index+1} из {total}"
     )
 
         # кнопки навигации

@@ -14,6 +14,7 @@ from telegram.ext import (
     filters, 
     CallbackQueryHandler
 )
+from geoalchemy2.shape import to_shape
 from handlers.ShowInfoConversation import info_command
 from handlers.ReferralLinkConversation import start_invite
 
@@ -66,7 +67,7 @@ ROLE_MAP = {
     "🏢 мои объекты": 5            # owner personal cabinet
 }
 
-WELCOME_PHOTO_URL = "/bot/static/images/welcome_.jpg"
+WELCOME_PHOTO_URL = "/bot/static/images/welcome.jpg"
 
 WELCOME_TEXT = (
     "Здравствуйте, \n Я Николай Боравлев, программист, спортсмен и основатель EasySochi. Автоматизирую процессы с 2023 г.\n\n"
@@ -78,7 +79,14 @@ WELCOME_TEXT = (
 )
 
 # Constants for conversation states  
-NAME_REQUEST, ASK_PHONE, MAIN_MENU, VIEW_BOOKINGS, VIEW_OBJECTS, VIEW_ORDERS = range(6)
+(NAME_REQUEST, 
+ ASK_PHONE, 
+ MAIN_MENU, 
+ VIEW_BOOKINGS, 
+ VIEW_OBJECTS, 
+ EDIT_OBJECT_PROMPT, 
+ EDIT_OBJECT_WAIT_INPUT, 
+ VIEW_ORDERS) = range(8)
 
 
 
@@ -603,7 +611,7 @@ async def route_by_role(update: Update, context: ContextTypes.DEFAULT_TYPE, role
                 exception=e,
                 context={'role_id': role_id, 'session_id': session_id}
             )
-            await update.message.reply_text("❗ Произошла ошибка при перенаправлении.")
+            await update.message.reply_text("❗ Произошла ошибка при перенаправлении.",reply_markup=ReplyKeyboardRemove())
             return ConversationHandler.END
     
 #==== Показ объектов лендлорду ===
@@ -641,11 +649,11 @@ async def select_owner_objects(update: Update, context: ContextTypes.DEFAULT_TYP
                 user_id=tg_user_id,
                 action="no_owner_objects",
             )
-            await update.message.reply_text("🏢 У вас нет активных объектов.")
+            await update.message.reply_text("🏢 У вас нет активных объектов.",reply_markup=ReplyKeyboardRemove())
             return MAIN_MENU
         
         context.user_data["owner_objects"] = apartments
-        msg = await send_message(update, f"🔍Найдено ваших объектов: {len(apartments)}")
+        msg = await send_message(update, f"🔍Найдено ваших объектов: {len(apartments)}",reply_markup=ReplyKeyboardRemove())
         await add_message_to_cleanup(context, msg.chat_id, msg.message_id)
         await show_owner_objects(update, context)
         return VIEW_OBJECTS
@@ -668,9 +676,12 @@ async def show_owner_objects(update: Update, context: ContextTypes.DEFAULT_TYPE)
     current_index = 0
     data = query.data if query else None
 
-    if data and data.startswith(("apt_next_", "apt_prev_")):
+    if data:
         try:
-            current_index = int(data.split("_")[-1])
+            if data.startswith(("apt_next_", "apt_prev_")):       
+                current_index = int(data.split("_")[-1])
+            elif data.startswith("placeholder"):
+                await ConversationHandler.END
         except (ValueError, IndexError):
             await query.message.reply_text("Ошибка индекса. Попробуйте снова.")
             return MAIN_MENU
@@ -722,7 +733,7 @@ async def select_owner_orders(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
     if not owner_booking_full:
-        await update.message.reply_text("🏢 Активных бронирований не найдено.")
+        await update.message.reply_text("🏢 Активных бронирований не найдено.",reply_markup=ReplyKeyboardRemove())
         return MAIN_MENU
     
     context.user_data["owner_bookings"] = owner_booking_full
@@ -739,6 +750,7 @@ async def show_owner_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data if query else None
     print("🔁 Callback получен:", data)
+
     # Получаем список объектов из user_data
     bookings = context.user_data.get("owner_bookings", [])
     if not bookings:
@@ -759,10 +771,6 @@ async def show_owner_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except (ValueError, IndexError):
                 await query.message.reply_text("Ошибка индекса. Попробуйте снова.")
                 return MAIN_MENU
-        elif data.startswith("back_to_objects"):
-            await select_owner_objects (update,context)
-            return VIEW_OBJECTS
-
 
 
     # Ограничиваем индекс допустимым диапазоном
@@ -783,8 +791,140 @@ async def show_owner_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         msg = await update.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
     await add_message_to_cleanup(context, msg.chat_id, msg.message_id)
-    return VIEW_ORDERS   
+    return VIEW_ORDERS
 
+#======редактирование карточки квартиры=========
+async def handle_apartment_upgrade(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    tg_user_id = update.effective_user.id
+    apartment_id = int(query.data.split("_")[-1])
+
+    with LoggingContext("apartment_upgrade_init", user_id=tg_user_id, apartment_id=apartment_id):
+        async with get_async_session() as session:
+            result = await session.execute(
+                select(Apartment).where(Apartment.id == apartment_id)
+            )
+            apartment = result.scalar_one_or_none()
+
+            if not apartment:
+                structured_logger.warning(
+                    f"Apartment {apartment_id} not found for upgrade.",
+                    user_id=tg_user_id,
+                    action="apartment_upgrade_not_found",
+                    context={'apartment_id': apartment_id}
+                )
+                await query.message.edit_text("❌ Объект не найден.")
+                return VIEW_OBJECTS
+
+            if apartment.owner_tg_id != tg_user_id:
+                structured_logger.warning(
+                    f"Unauthorized edit attempt by user {tg_user_id}",
+                    user_id=tg_user_id,
+                    action="unauthorized_apartment_edit_attempt",
+                    context={'apartment_id': apartment_id}
+                )
+                await query.message.edit_text("🚫 У вас нет прав для редактирования этого объекта.")
+                return VIEW_OBJECTS
+
+            structured_logger.info(
+                "User initiated apartment price edit.",
+                user_id=tg_user_id,
+                action="apartment_upgrade_start",
+                context={'apartment_id': apartment_id, 'current_price': apartment.price}
+            )
+
+            # Сохраняем id квартиры для последующих шагов
+            context.user_data["edit_apartment_id"] = apartment_id
+
+            text = (
+                f"🛠 Вы можете отредактировать только <b>стоимость</b> объекта.\n\n"
+                f"💰 Текущая цена: <b>{apartment.price} ₽/ночь</b>\n\n"
+                f"Выберите действие:"
+            )
+
+            keyboard = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("✏️ Редактировать", callback_data="edit_price_start"),
+                    InlineKeyboardButton("🔙 Вернуться назад", callback_data="back_to_objects")
+                ]
+            ])
+
+            await query.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
+            return EDIT_OBJECT_PROMPT
+        
+async def handle_edit_price_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    await query.message.edit_text(
+        "💬 Введите новую стоимость в рублях (только число):",
+        reply_markup=None
+    )
+    return EDIT_OBJECT_WAIT_INPUT
+
+async def handle_new_price_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    tg_user_id = update.effective_user.id
+    new_price_text = update.message.text.strip()
+    apartment_id = context.user_data.get("edit_apartment_id")
+
+    with LoggingContext("apartment_price_edit", user_id=tg_user_id, apartment_id=apartment_id):
+        try:
+            new_price = float(new_price_text)
+            if new_price <= 0:
+                raise ValueError("Price must be positive.")
+        except ValueError:
+            structured_logger.warning(
+                "Invalid price input.",
+                user_id=tg_user_id,
+                action="invalid_price_input",
+                context={'input_value': new_price_text}
+            )
+            await update.message.reply_text("❌ Введите корректное положительное число.")
+            return "EDIT_PRICE_WAIT_INPUT"
+
+        async with get_async_session() as session:
+            result = await session.execute(
+                select(Apartment).where(Apartment.id == apartment_id)
+            )
+            apartment = result.scalar_one_or_none()
+
+            if not apartment:
+                await update.message.reply_text("⚠️ Объект не найден.")
+                return VIEW_OBJECTS
+
+            if apartment.owner_tg_id != tg_user_id:
+                await update.message.reply_text("🚫 У вас нет прав для изменения этого объекта.")
+                return VIEW_OBJECTS
+
+            # Обновляем цену
+            old_price = apartment.price
+            apartment.price = new_price
+            apartment.updated_at = datetime.utcnow()
+            await session.commit()
+
+            structured_logger.info(
+                f"Apartment price updated from {old_price} to {new_price}",
+                user_id=tg_user_id,
+                action="apartment_price_updated",
+                context={
+                    'apartment_id': apartment_id,
+                    'old_price': old_price,
+                    'new_price': new_price
+                }
+            )
+
+            # Уведомляем пользователя и возвращаем к списку
+            await update.message.reply_text(
+                f"✅ Стоимость обновлена: <b>{new_price:.0f} ₽/ночь</b>",
+                parse_mode="HTML"
+            )
+
+            # Сразу обновляем карточки
+            await select_owner_objects(update, context)
+            return VIEW_OBJECTS
+        
 #======показ бронирований Арендатору=========
 async def select_renter_bookings (update: Update, context: ContextTypes.DEFAULT_TYPE):
     ACTIVE_BOOKING_STATUSES = [5, 6]
@@ -827,6 +967,7 @@ async def show_renter_bookings(update: Update, context: ContextTypes.DEFAULT_TYP
     data = query.data if query else None
     print("🔁 Callback получен:", data)
     # Получаем список объектов из user_data
+
     bookings = context.user_data.get("renter_bookings", [])
     if not bookings:
         if query:
@@ -908,7 +1049,7 @@ async def confirm_delete_apartment(update: Update, context: ContextTypes.DEFAULT
     )
     return VIEW_OBJECTS
 
-#=======подтвержждение получено ==========
+#=======подтверждение получено ==========
 async def delete_apartment_confirmed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
@@ -993,7 +1134,63 @@ async def delete_apartment_confirmed(update: Update, context: ContextTypes.DEFAU
             await update.callback_query.message.edit_text("❌ Объект успешно удалён.",
                                                             reply_markup=None)
             return VIEW_OBJECTS
-        
+
+
+#=======показ на карте арендатору=====
+async def handle_show_map(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    source,_,_,apt_id = query.data.split("_")
+    
+    request_source = str(source)
+    apt_id = int(apt_id)
+
+
+    async with get_async_session() as session:
+        apartment = (
+            await session.execute(select(Apartment).where(Apartment.id == apt_id))
+        ).scalar_one_or_none()
+
+        if not apartment or not apartment.coordinates:
+            await query.message.reply_text("⚠️ Ошибка карты: координаты отсутствуют.")
+            if request_source == "owner":
+                return VIEW_OBJECTS
+            else:
+                return VIEW_BOOKINGS
+
+        # Преобразуем в координаты
+        point = to_shape(apartment.coordinates)
+        lat, lon = point.y, point.x
+
+        # Проверяем, показывалась ли уже карта
+        previous_msg_id = context.user_data.get("map_message_id")
+        structured_logger.info(f"Map request from menu for apartment {apt_id}",
+                           user_id = update.effective_user.id,
+                           action = "Show map from menu",
+                           context = {
+                               'Geo':point,
+                               'Adress':apartment.short_address,
+                               'source': request_source,
+                               'prev_msg':previous_msg_id
+                           }
+        )
+
+        if previous_msg_id:
+            try:
+                await context.bot.delete_message(chat_id=query.message.chat_id, message_id=previous_msg_id)
+            except Exception:
+                pass
+
+        msg = await query.message.reply_location(latitude=lat, longitude=lon)
+        context.user_data["map_message_id"] = msg.message_id
+
+                # --- Возврат состояния в зависимости от источника ---
+        print(f"DEBUG_FROM_where_MAP_requested: {request_source}")
+        if request_source == "owner":
+            return VIEW_OBJECTS
+        else:
+            return VIEW_BOOKINGS    
 
 # === Отмена ===
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):

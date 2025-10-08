@@ -1,5 +1,6 @@
 import datetime
 from datetime import date
+from enum import IntEnum
 
 from telegram import (
     Update,
@@ -19,7 +20,8 @@ from telegram.ext import (
     MessageHandler,
     filters
 )
-import logging
+from geoalchemy2.shape import to_shape
+
 from decimal import Decimal
 from db.db_async import get_async_session
 
@@ -31,12 +33,14 @@ from utils.escape import safe_html
 from utils.request_confirmation import send_booking_request_to_owner
 from utils.message_tricks import cleanup_messages, add_message_to_cleanup, send_message, sanitize_message
 
-from db.models.apartment_types import ApartmentType
-from db.models.apartments import Apartment
-from db.models.search_sessions import SearchSession
-from db.models.bookings import Booking
-from db.models.booking_types import BookingType
-from db.models.sessions import Session
+from db.models import (ApartmentType,
+                       Apartment,
+                       Session,
+                       SearchSession,
+                       Booking,
+                       BookingType)
+
+from utils.logging_config import structured_logger, log_db_select
 
 from sqlalchemy import update as sa_update, select 
 from sqlalchemy.orm import selectinload
@@ -46,15 +50,16 @@ from sqlalchemy.orm import selectinload
 # Состояния диалога
 (SELECTING_CHECKIN, 
  SELECTING_CHECKOUT, 
- APTS_TYPES_SELECTION, 
- PRICE_FILTER_SELECTION,
- GUESTS_NUMBER,
- BOOKING_COMMENT)= range(6)
+ SELECTING_TYPES, 
+ SELECTING_PRICE,
+ VIEWING_APARTMENTS,
+ ENTERING_GUESTS,
+ BOOKING_COMMENT)= range(7)
 
 
-
-BOOKING_STATUS_PENDING = 5
-BOOKING_STATUS_CONFIRMED = 6
+class BookingStatus(IntEnum):
+    BOOKING_STATUS_PENDING = 5
+    BOOKING_STATUS_CONFIRMED = 6
 
 PRICE_MAP = {
     "price_all":        (None, {"text": "Без фильтра по цене"}),
@@ -66,37 +71,60 @@ PRICE_MAP = {
 async def start_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Старт поиска жилья: инициализация данных пользователя"""
     # Определяем источник вызова
-    if update.callback_query:
-        query = update.callback_query
-        await query.answer()
-        # Убираем кнопки, редактируя предыдущее сообщение
-        await query.message.delete()
-        target_chat = query.message.chat_id
-    else:
-        target_chat = update.effective_chat.id
+    try:
+        if update.callback_query:
+            query = update.callback_query
+            await query.answer()
+            # Убираем кнопки, редактируя предыдущее сообщение
+            await query.message.delete()
+            target_chat = query.message.chat_id
+        else:
+            target_chat = update.effective_chat.id
 
-    # Инициализация данных пользователя
-    context.user_data["check_in"] = None
-    context.user_data["check_out"] = None
-    context.user_data["price_filter"] = None
-    context.user_data["chosen_apartment"] = None
-    context.user_data["actual_price"] = None
-    context.user_data["apartment_type"] = None
-    context.user_data["filtered_apartments_ids"] = None
-    context.user_data["filtered_apartments"] = None
-    context.user_data["new_search_id"] = None
-    
-    await cleanup_messages(context)
-    
-    # Отправляем новое сообщение с календарём
-    msg = await context.bot.send_message(
-        chat_id=target_chat,
-        text="📅 Выберите дату заезда",
-        reply_markup=build_calendar(date.today().year, date.today().month)
-    )
-    await add_message_to_cleanup(context,msg.chat_id,msg.message_id)
-    return SELECTING_CHECKIN
+        # Инициализация данных пользователя
+        context.user_data["check_in"] = None
+        context.user_data["check_out"] = None
+        context.user_data["price_filter"] = None
+        context.user_data["chosen_apartment"] = None
+        context.user_data["actual_price"] = None
+        context.user_data["apartment_type"] = None
+        context.user_data["filtered_apartments_ids"] = None
+        context.user_data["filtered_apartments"] = None
+        context.user_data["new_search_id"] = None
+        
+        await cleanup_messages(context)
+        
+        structured_logger.info(
+            "Initiate start_search command",
+            user_id = target_chat,
+            action = "Start new search"
+        )
 
+        # Отправляем новое сообщение с календарём
+        msg = await context.bot.send_message(
+            chat_id=target_chat,
+            text="📅 Выберите дату заезда",
+            reply_markup=build_calendar(date.today().year, date.today().month)
+        )
+        await add_message_to_cleanup(context,msg.chat_id,msg.message_id)
+        return SELECTING_CHECKIN
+    
+    except Exception as e:
+
+        structured_logger.error(
+            f"Critical error in start new search: {str(e)}",
+            user_id=target_chat,
+            action="Create new object",
+            exception=e,
+            context={
+                'tg_user_id': target_chat,
+                'error_type': type(e).__name__
+            }
+        )
+        await update.message.reply_text(
+            "Произошла ошибка. Попробуйте позже или обратитесь в поддержку."
+        )
+    return ConversationHandler.END
 
 async def calendar_callback(update: Update, context: CallbackContext):
     """Обработка нажатий календаря"""
@@ -174,7 +202,7 @@ async def calendar_callback(update: Update, context: CallbackContext):
                 parse_mode="HTML"
             )
         await add_message_to_cleanup(context,msg.chat_id,msg.message_id)
-        return APTS_TYPES_SELECTION
+        return SELECTING_TYPES
 
 
 async def handle_apartment_type_multiselection(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -193,7 +221,7 @@ async def handle_apartment_type_multiselection(update: Update, context: ContextT
                 text="⚠️ Вы не выбрали ни одного типа. Пожалуйста, выберите хотя бы один.",
                 reply_markup=InlineKeyboardMarkup(build_types_keyboard(context.user_data["types"], selected))
             )
-            return APTS_TYPES_SELECTION
+            return SELECTING_TYPES
         
         # ✅ Выбор подтверждён
         selected_names = [t["name"] for t in context.user_data["types"] if t["id"] in selected]
@@ -206,14 +234,14 @@ async def handle_apartment_type_multiselection(update: Update, context: ContextT
         context.user_data["selected_names"] = selected_names
 
         # ⬇️ Здесь вызываем следующий шаг
-        return PRICE_FILTER_SELECTION   
+        return SELECTING_PRICE   
 
     # 🔹 2. Пользователь выбрал/снял галочку с типа
     try:
         type_id = int(data.replace("type_", ""))
     except ValueError:
         await query.edit_message_text("Ошибка выбора. Попробуйте снова.")
-        return APTS_TYPES_SELECTION
+        return SELECTING_TYPES
 
     if type_id in selected:
         selected.remove(type_id)
@@ -228,16 +256,16 @@ async def handle_apartment_type_multiselection(update: Update, context: ContextT
         text="✅ Выберите тип(ы) квартиры:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
-    return APTS_TYPES_SELECTION
+    return SELECTING_TYPES
 
-async def handle_price_filter_type_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_price_filter_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = query.data
 
     price_range, meta = PRICE_MAP.get(data, (None, None))
     if meta is None:
-        logging.warning("Unknown price filter callback_data: %s", data)
+        structured_logger.warning("Unknown price filter callback_data: %s", data)
         await query.answer("Неизвестный фильтр цены.", show_alert=True)
         return
 
@@ -256,15 +284,270 @@ async def handle_price_filter_type_selection(update: Update, context: ContextTyp
         "🔍 Переходим к подбору квартир..."
     )
 
-    # 1️⃣ Фильтрация квартир
-    apartment_ids = await filter_apartments(update, context)
+    # Filter apartments
+    try:
+        apartment_ids = await filter_apartments(update, context)
+        if not apartment_ids:
+            return ConversationHandler.END
+        
+        # ✅ Show count BEFORE the card
+        count_msg = await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f"🔍 Найдено предложений: {len(apartment_ids)}"
+        )
+        await add_message_to_cleanup(context, count_msg.chat_id, count_msg.message_id)
+        
+        structured_logger.info(
+            "Search filter created",
+            action = "search filters implemented",
+            context = {
+                'in':check_in,
+                'out':check_out,
+                'price_range':price_range,
+                'types': selected_names,
+                'number_candidates': len(apartment_ids) 
+            }
+        )
 
-    if not apartment_ids:
+        # Now show the first apartment
+        await show_apartment_card(update, context, index=0)
+        return VIEWING_APARTMENTS
+        
+    except Exception as e:
+        structured_logger.error(f"Error filtering apartments: {e}")
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="❌ Произошла ошибка. Попробуйте снова /start_search"
+        )
         return ConversationHandler.END
 
-    # 2️⃣ Сразу переходим к показу первой карточки
-    await show_filtered_apartments(update, context)   #вызов функции показа карточек
+async def show_apartment_card(update: Update, context: ContextTypes.DEFAULT_TYPE, index: int = 0, is_navigation: bool = False):
+    """Unified function to display apartment cards."""
+    apts = context.user_data.get("filtered_apartments", [])
+    if not apts:
+        await send_message(update, "❌ Список квартир пуст")
+        return ConversationHandler.END
+    
+    total = len(apts)
+    index = max(0, min(index, total - 1))
+    
+    apartment = apts[index]
+    text, media, markup = booking_apartment_card_full(apartment, index, total)
+    
+    query = update.callback_query
+    
+    # Update search session index
+    if "new_search_id" in context.user_data:
+        async with get_async_session() as session:
+            await session.execute(
+                sa_update(SearchSession)
+                .where(SearchSession.id == context.user_data["new_search_id"])
+                .values(current_index=index)
+            )
+            await session.commit()
+    
+    # Display apartment
+    if query and is_navigation:
+        # ✅ Edit existing message (only during navigation)
+        photo = media[0].media if media else None
+        if photo:
+            await query.message.edit_media(
+                media=InputMediaPhoto(photo, caption=text, parse_mode="HTML"),
+                reply_markup=markup
+            )
+        else:
+            await query.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
+    else:
+        # ✅ Send new message (first display or non-query updates)
+        chat_id = update.effective_chat.id
+        
+        if media and len(media) > 1:
+            await context.bot.send_media_group(chat_id=chat_id, media=media)
+            sent = await context.bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode="HTML")
+        elif media and len(media) == 1:
+            sent = await context.bot.send_photo(chat_id=chat_id, photo=media[0].media, caption=text, reply_markup=markup, parse_mode="HTML")
+        else:
+            sent = await context.bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode="HTML")
+        
+        await add_message_to_cleanup(context, sent.chat_id, sent.message_id)
 
+
+async def navigate_apartments(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle prev/next navigation."""
+    query = update.callback_query
+    await query.answer()
+    
+    try:
+        index = int(query.data.split("_")[-1])
+    except (ValueError, IndexError):
+        await query.answer("❌ Ошибка навигации", show_alert=True)
+        return VIEWING_APARTMENTS
+    
+    await show_apartment_card(update, context, index,is_navigation=True)
+    return VIEWING_APARTMENTS
+
+async def start_booking(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    try:
+        _,apartment_id,price = query.data.split('_')               
+        await query.edit_message_reply_markup(reply_markup=None)
+    except ValueError:
+        await query.edit_message_text("Ошибка. Начните поиск заново.")
+        structured_logger.warning("Не удалось убрать клавиатуру: %s", e)
+        return ConversationHandler.END
+
+    
+    apartment_id = int(apartment_id)
+    price = Decimal(price) 
+    
+    context.user_data["chosen_apartment"] = apartment_id
+    context.user_data["actual_price"] = price
+
+    await query.message.reply_text("Введите количество гостей:")
+    return ENTERING_GUESTS
+
+async def handle_entering_guest_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    try:
+        ENTERING_GUESTS = int(update.message.text)
+        if ENTERING_GUESTS <= 0:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text("❌ Введите корректное число (>0):")
+        return ENTERING_GUESTS
+
+    context.user_data["guest_count"] = ENTERING_GUESTS
+    
+    # Запрашиваем комментарий
+    keyboard = [[KeyboardButton("направить комментарий")]]
+    await update.message.reply_text(
+        "🕊 Вы можете направить собственнику доп.информацию:",
+        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+    )
+    return BOOKING_COMMENT
+
+async def finalize_booking (update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        comment = update.message.text.strip()
+        if not comment or comment.lower() == "направить комментарий":
+            comment = "Комментариев нет"
+        else:
+            comment = sanitize_message(comment)[:255]
+        print(f"[DEBUG] context.user_data: {context.user_data}")
+        check_in = context.user_data.get("check_in") 
+        check_out = context.user_data.get("check_out")
+        price = context.user_data.get("actual_price")
+        total = (check_out - check_in).days * price
+        msg_id = context.user_data.get("last_filter_apartment_message_id")
+        cht_id = context.user_data.get("last_filter_apartment_chat_id")
+
+        async with get_async_session() as session:
+            session_id = context.user_data.get("session_id")
+            if not session_id:
+                # создаём новую сессию
+                new_session = Session(tg_user_id=context.user_data['tg_user_id'], role_id = 1,last_action={"event": "order_started"})
+                session.add(new_session)
+                await session.flush()  # получаем id новой сессии
+                session_id = new_session.id
+                context.user_data["session_id"] = session_id  # кладём обратно в контекст
+
+            booking = Booking(
+                tg_user_id = context.user_data['tg_user_id'],
+                apartment_id = context.user_data['chosen_apartment'],
+                status_id = BookingStatus.BOOKING_STATUS_PENDING,
+                guest_count = context.user_data['guest_count'],
+                total_price = total,
+                comments = comment,
+                check_in = check_in,
+                check_out = check_out
+            )
+            session.add(booking)
+            await session.commit()
+            await session.refresh(booking)
+
+            stmt = (
+                select(Booking)
+                .options(
+                    selectinload(Booking.apartment)
+                    .selectinload(Apartment.apartment_type),
+                    selectinload(Booking.apartment)
+                    .selectinload(Apartment.images),
+                    selectinload(Booking.apartment)
+                    .selectinload(Apartment.owner) 
+                )
+                .where(Booking.id == booking.id)
+            )
+            result = await session.execute(stmt)
+            booking_full = result.scalar_one()
+            print(f"[DEBUG] Отправка запроса владельцу для booking_id={booking_full.id}")
+            await send_booking_request_to_owner(context.bot,booking_full)
+            print(f"[DEBUG] Сообщение владельцу должно быть отправлено")
+
+            await update.message.reply_text("✅ Ваше бронирование создано. После подтверждения заявки владельцем бот с вами свяжется.")
+            text, media = show_booked_appartment(booking_full)
+
+            structured_logger.info (
+                "New order request created",
+                user_id = Booking.tg_user_id,
+                action = "New booking request",
+                context={
+                    'booking_id':Booking.id,
+                    'Address': Booking.apartment.short_address,
+                    'Price': Booking.total_price,
+                    'in': Booking.check_in,
+                    'out':Booking.check_out
+                
+                }
+            )
+        
+            msg_ids = []
+
+            if media:
+                media_messages = await update.message.reply_media_group(media)
+                msg_ids.extend([m.message_id for m in media_messages])
+
+            msg_text = await update.message.reply_text(text, parse_mode="HTML")
+            msg_ids.append(msg_text.message_id)
+
+            # Сохраняем список ID в session.last_action
+            session_obj = await session.get(Session, session_id)
+            if session_obj:
+                session_obj.last_action = {
+                    "event": "booking_created_message",
+                    "message_ids": msg_ids
+                }
+                    
+            await session.commit()
+
+            if cht_id and msg_id:
+                try:
+                    await context.bot.delete_message(chat_id=cht_id, message_id=msg_id)
+                    print(f"[DEBUG] Удалено сообщение с карточкой (msg_id={msg_id})")
+                except Exception as e:
+                    print(f"[WARNING] Не удалось удалить сообщение с карточкой: {e}")
+
+            context.user_data["last_filter_apartment_message_id"] = None
+            context.user_data["last_filter_apartment_chat_id"] = None
+
+    except Exception as e:
+
+        structured_logger.error(
+            f"Critical error in new booking creation: {str(e)}",
+            action="Create new booking",
+            exception=e,
+            context={
+
+                'error_type': type(e).__name__
+            }
+        )
+        await update.message.reply_text(
+            "Произошла ошибка. Попробуйте позже или обратитесь в поддержку."
+        )
+
+
+    return ConversationHandler.END
 
 # === Вспомогательная функция ===
 async def filter_apartments(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -306,267 +589,41 @@ async def filter_apartments(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "new_search_id": new_search.id
         })
 
-
-    # ✅ Сообщаем пользователю, сколько найдено объектов
-    msg = await send_message(update, f"🔍 Найдено предложений: {len(apartment_ids)}")
-    await add_message_to_cleanup(context, msg.chat_id, msg.message_id)
     return apartment_ids
 
-
-async def show_filtered_apartments(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    
-    """
-    Отображает карточку квартиры (первая или при навигации).
-    Если индекс не передан в callback_data → показывается первая карточка.
-    показывает всю галлерею. Подключается в двух местах
-    """
-    query = update.callback_query
-    data = query.data if query else None
-
-    # ✅ список квартир
-    apts = context.user_data.get("filtered_apartments", [])
-    if not apts:
-        if query:
-            msg = await query.edit_message_text("❌ Список квартир пуст.")
-            await add_message_to_cleanup(context, msg.chat_id, msg.message_id)
-        else:
-            await update.message.reply_text("❌ Список квартир пуст.")
-        return ConversationHandler.END
-
-    # ✅ определяем индекс (по кнопке или дефолт = 0)
-    current_index = 0
-    if data and (data.startswith("apt_next_") or data.startswith("apt_prev_")):
-        try:
-            current_index = int(data.split("_")[-1])
-        except (ValueError, IndexError):
-            await query.message.reply_text("Ошибка индекса. Попробуйте снова.")
-            return ConversationHandler.END
-
-    # ✅ ограничиваем индекс допустимым диапазоном
-    total = len(apts)
-    if current_index < 0:
-        current_index = 0
-    if current_index >= total:
-        current_index = total - 1
-
-    current_apartment = apts[current_index]
-
-    # ✅ формируем карточку
-    text, media, markup = booking_apartment_card_full(current_apartment, current_index, total=total)
-
-    # ✅ объект для ответа
-    msg_target = query.message if query else update.message
-
-    # ✅ удаляем старое сообщение, если нужно
-    if query:
-        await msg_target.delete()
-
-    # ✅ отправляем фото/текст
-    if media and len(media) > 1:
-        await msg_target.reply_media_group(media)
-        sent = await msg_target.reply_text(text, reply_markup=markup, parse_mode="HTML")
-    elif media and len(media) == 1:
-        sent = await msg_target.reply_photo(media[0].media, caption=text, reply_markup=markup, parse_mode="HTML")
-    else:
-        sent = await msg_target.reply_text(text, reply_markup=markup, parse_mode="HTML")
-
-    context.user_data["last_filter_apartment_message_id"] = sent.message_id
-    context.user_data["last_filter_apartment_chat_id"] = sent.chat_id
-    await add_message_to_cleanup(context, sent.chat_id, sent.message_id)
-
-async def ask_guests_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_show_map(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    try:
-        _,apartment_id,price = query.data.split('_')
-    except ValueError:
-        await query.edit_message_text("Ошибка. Начните поиск заново.")
-        return APTS_TYPES_SELECTION
-    
-    apartment_id = int(apartment_id)
-    price = Decimal(price) 
-    
-    context.user_data["chosen_apartment"] = apartment_id
-    context.user_data["actual_price"] = price
 
-    await query.message.reply_text("Введите количество гостей:")
-    return GUESTS_NUMBER
-
-async def handle_guests_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    try:
-        guests_number = int(update.message.text)
-        if guests_number <= 0:
-            raise ValueError
-    except ValueError:
-        await update.message.reply_text("❌ Введите корректное число (>0):")
-        return GUESTS_NUMBER
-
-    context.user_data["guest_count"] = guests_number
-    
-    # Запрашиваем комментарий
-    keyboard = [[KeyboardButton("направить комментарий")]]
-    await update.message.reply_text(
-        "🕊 Вы можете направить собственнику доп.информацию:",
-        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-    )
-    return BOOKING_COMMENT
-
-async def handle_bookings_notion(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    comment = update.message.text.strip()
-    if not comment or comment.lower() == "направить комментарий":
-        comment = "Комментариев нет"
-    else:
-        comment = sanitize_message(comment)[:255]
-    print(f"[DEBUG] context.user_data: {context.user_data}")
-    check_in = context.user_data.get("check_in") 
-    check_out = context.user_data.get("check_out")
-    price = context.user_data.get("actual_price")
-    total = (check_out - check_in).days * price
-    msg_id = context.user_data.get("last_filter_apartment_message_id")
-    cht_id = context.user_data.get("last_filter_apartment_chat_id")
+    apt_id = int(query.data.split("_")[-1])
 
     async with get_async_session() as session:
-        session_id = context.user_data.get("session_id")
-        if not session_id:
-            # создаём новую сессию
-            new_session = Session(tg_user_id=context.user_data['tg_user_id'], role_id = 1,last_action={"event": "order_started"})
-            session.add(new_session)
-            await session.flush()  # получаем id новой сессии
-            session_id = new_session.id
-            context.user_data["session_id"] = session_id  # кладём обратно в контекст
+        apartment = (
+            await session.execute(select(Apartment).where(Apartment.id == apt_id))
+        ).scalar_one_or_none()
 
-        booking = Booking(
-            tg_user_id = context.user_data['tg_user_id'],
-            apartment_id = context.user_data['chosen_apartment'],
-            status_id = BOOKING_STATUS_PENDING,
-            guest_count = context.user_data['guest_count'],
-            total_price = total,
-            comments = comment,
-            check_in = check_in,
-            check_out = check_out
-        )
-        session.add(booking)
-        await session.commit()
-        await session.refresh(booking)
+        if not apartment or not apartment.coordinates:
+            await query.message.reply_text("⚠️ Ошибка карты: координаты отсутствуют.")
+            return VIEWING_APARTMENTS
 
-        stmt = (
-            select(Booking)
-            .options(
-                selectinload(Booking.apartment)
-                .selectinload(Apartment.apartment_type),
-                selectinload(Booking.apartment)
-                .selectinload(Apartment.images),
-                selectinload(Booking.apartment)
-                .selectinload(Apartment.owner) 
-            )
-            .where(Booking.id == booking.id)
-        )
-        result = await session.execute(stmt)
-        booking_full = result.scalar_one()
-        print(f"[DEBUG] Отправка запроса владельцу для booking_id={booking_full.id}")
-        await send_booking_request_to_owner(context.bot,booking_full)
-        print(f"[DEBUG] Сообщение владельцу должно быть отправлено")
+        # Преобразуем в координаты
+        point = to_shape(apartment.coordinates)
+        lat, lon = point.y, point.x
 
-        await update.message.reply_text("✅ Ваше бронирование создано. После подтверждения заявки владельцем бот с вами свяжется.")
-        text, media = show_booked_appartment(booking_full)
-
-    
-        msg_ids = []
-
-        if media:
-            media_messages = await update.message.reply_media_group(media)
-            msg_ids.extend([m.message_id for m in media_messages])
-
-        msg_text = await update.message.reply_text(text, parse_mode="HTML")
-        msg_ids.append(msg_text.message_id)
-
-        # Сохраняем список ID в session.last_action
-        session_obj = await session.get(Session, session_id)
-        if session_obj:
-            session_obj.last_action = {
-                "event": "booking_created_message",
-                "message_ids": msg_ids
-            }
-                
-        await session.commit()
-
-        if cht_id and msg_id:
+        # Проверяем, показывалась ли уже карта
+        previous_msg_id = context.user_data.get("map_message_id")
+        print(f"DEBUG_previous_MAP: {previous_msg_id}")
+        if previous_msg_id:
             try:
-                await context.bot.delete_message(chat_id=cht_id, message_id=msg_id)
-                print(f"[DEBUG] Удалено сообщение с карточкой (msg_id={msg_id})")
-            except Exception as e:
-                print(f"[WARNING] Не удалось удалить сообщение с карточкой: {e}")
+                await context.bot.delete_message(chat_id=query.message.chat_id, message_id=previous_msg_id)
+            except Exception:
+                pass
 
-        context.user_data["last_filter_apartment_message_id"] = None
-        context.user_data["last_filter_apartment_chat_id"] = None
+        msg = await query.message.reply_location(latitude=lat, longitude=lon)
+        context.user_data["map_message_id"] = msg.message_id
 
-    return ConversationHandler.END
-
-
-
-async def show_filtered_apartments_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Показ карточки квартиры в одном сообщении (поддержка навигации кнопками).
-    Используется только первое фото.
-    Сейчас эта функия задействована после нажатия на кнопки навигации
-    """
-    query = update.callback_query
-    data = query.data if query else None
-
-    apts = context.user_data.get("filtered_apartments", [])
-    if not apts:
-        await (query.message.edit_text("❌ Список квартир пуст.") if query else update.message.reply_text("❌ Список квартир пуст."))
-        return ConversationHandler.END
-
-    new_search_id = context.user_data.get("new_search_id")
-
-    # Определяем индекс
-    current_index = 0
-    if data and (data.startswith("apt_next_") or data.startswith("apt_prev_")):
-        try:
-            current_index = int(data.split("_")[-1])
-        except (ValueError, IndexError):
-            await query.message.reply_text("Ошибка индекса. Попробуйте снова.")
-            return ConversationHandler.END
+        return VIEWING_APARTMENTS
     
-
-    # Ограничение диапазона
-    total = len(apts)
-    current_index = max(0, min(current_index, total - 1))
-
-    async with get_async_session() as session:
-        await session.execute(
-            sa_update(SearchSession)
-            .where(SearchSession.id == new_search_id)
-            .values(current_index=current_index)
-        )
-        await session.commit()
-
-    apartment = apts[current_index]
-    text, media, markup = booking_apartment_card_full(apartment, current_index, total)
-
-    # ✅ используем только первое фото
-    photo = media[0].media if media else None
-
-    # 🔥 Если callback → редактируем старое сообщение
-    if query:
-        if photo:
-            await query.message.edit_media(
-                media=InputMediaPhoto(photo, caption=text, parse_mode="HTML"),
-                reply_markup=markup
-            )
-        else:
-            await query.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
-        return
-
-    # 🔥 Если первый показ → отправляем новое сообщение
-    if photo:
-        await update.message.reply_photo(photo, caption=text, reply_markup=markup, parse_mode="HTML")
-    else:
-        await update.message.reply_text(text, reply_markup=markup, parse_mode="HTML")
-
-
 # === Отмена ===
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Отмена поиска"""

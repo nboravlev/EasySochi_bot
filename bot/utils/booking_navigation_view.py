@@ -31,15 +31,22 @@ def booking_apartment_card_full(current_apartment: Apartment, current_index: int
 
     buttons = []
     if current_index > 0:
-        buttons.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"apt_prev_{current_index-1}"))
+        buttons.append(InlineKeyboardButton("⬅️ Предыдущий", callback_data=f"apt_prev_{current_index-1}"))
     if current_index < total - 1:
         buttons.append(InlineKeyboardButton("➡️ Следующий", callback_data=f"apt_next_{current_index+1}"))
 
+    # Кнопки навигации по карточкам
     buttons = [buttons] if buttons else []
-    buttons.append([InlineKeyboardButton("✅ Забронировать", callback_data=f"book_{current_apartment.id}_{current_apartment.price}"),
-                   InlineKeyboardButton("🔍 Новый поиск", callback_data="start_search")])
+
+    # Кнопка "Показать на карте" — отдельной строкой
+    buttons.append([InlineKeyboardButton("📍 Показать на карте", callback_data=f"show_map_{current_apartment.id}")])
+
+    # Кнопки "Забронировать" и "Новый поиск" — в одной строке
+    buttons.append([
+        InlineKeyboardButton("✅ Забронировать", callback_data=f"book_{current_apartment.id}_{current_apartment.price}"),
+        InlineKeyboardButton("🔍 Новый поиск", callback_data="start_search")
+    ])
 
     markup = InlineKeyboardMarkup(buttons)
-
 
     return text, media, markup

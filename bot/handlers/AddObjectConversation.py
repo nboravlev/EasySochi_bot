@@ -29,10 +29,11 @@ from shapely.geometry import Point
 from utils.session_timeout import set_timeout
 from utils.session_timeout import SessionTimeoutManager
 from utils.escape import safe_html
-from utils.message_tricks import sanitize_message
+from utils.message_tricks import sanitize_message, send_message, add_message_to_cleanup, cleanup_messages
 
 from utils.full_view_owner import render_apartment_card_full
 
+from utils.logging_config import structured_logger, LoggingContext
 
 # Состояния
 (
@@ -55,22 +56,45 @@ from utils.full_view_owner import render_apartment_card_full
 async def start_add_object(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Начало добавления объекта: обработка как команды, так и колбэка"""
     # Определяем источник вызова
-    if update.callback_query:
-        query = update.callback_query
-        await query.answer()
-        # Убираем кнопки у старого сообщения
-        await query.edit_message_reply_markup(reply_markup=None)
-        target_chat = query.message.chat_id
-    else:
-        target_chat = update.effective_chat.id
+    try:
+        if update.callback_query:
+            query = update.callback_query
+            await query.answer()
+            # Убираем кнопки у старого сообщения
+            await query.edit_message_reply_markup(reply_markup=None)
+            target_chat = query.message.chat_id
+        else:
+            target_chat = update.effective_chat.id
 
-    # Отправляем первое сообщение сценария добавления
-    await context.bot.send_message(
-        chat_id=target_chat,
-        text="Давайте добавим ваш объект!\nВведите адрес или его часть:"
-    )
+        # Отправляем первое сообщение сценария добавления
+        await context.bot.send_message(
+            chat_id=target_chat,
+            text="Давайте добавим ваш объект!\nВведите адрес или его часть:"
+        )
+        structured_logger.info(
+            "Start add_object command",
+            user_id = target_chat,
+            action = "start add_object",
+            context = {}
+        )
 
-    return ADDRESS_INPUT
+        return ADDRESS_INPUT
+    except Exception as e:
+        # LoggingContext will automatically log the error with full context
+        structured_logger.error(
+            f"Critical error in start add_object: {str(e)}",
+            user_id=target_chat,
+            action="Add_object command error",
+            exception=e,
+            context={
+                'tg_user_id': target_chat,
+                'error_type': type(e).__name__
+            }
+        )
+        await update.message.reply_text(
+            "Произошла ошибка. Попробуйте позже или обратитесь в поддержку."
+        )
+        return ConversationHandler.END
 
 def shorten_address(label: str, keep_parts: int = 4) -> str:
     parts = label.split(", ")
@@ -91,12 +115,23 @@ async def handle_address_selection(update: Update, context: ContextTypes.DEFAULT
         
         index = int(index_str)
         selected = context.user_data["addr_candidates"][index]
-        
+        structured_logger.info(
+            "Choosing object addres",
+            action = "Choose object address",
+            context={'candidate_adress':selected}
+        )
 
     except Exception as e:
-        print(f"[ERROR] Ошибка при извлечении адреса: {e}")
-        await query.edit_message_text("Произошла ошибка при выборе адреса. Попробуйте снова.")
-        return ADDRESS_INPUT
+        structured_logger.error(
+            f"Critical error in address excavation: {str(e)}",
+            action="Choose object address",
+            exception=e,
+            context={
+                'error_type': type(e).__name__
+            }
+        )
+        await send_message(update,"Произошла ошибка при выборе адреса. Попробуйте снова.")
+        return ConversationHandler.END
 
 
     label = selected["label"]
@@ -133,30 +168,51 @@ async def handle_address_selection(update: Update, context: ContextTypes.DEFAULT
 
 # ⬇️ Обработка текста адреса. Блоки местами перепутаны как будто.
 async def handle_address_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.message.text
-    suggestions = await autocomplete_address(query)
-    print(f"SUGGESTION:{suggestions}")
-    if not suggestions:
-        await update.message.reply_text("Адрес не найден. Повторите ввод.")
-        return ADDRESS_INPUT
+    try:
+        query = update.message.text
+        suggestions = await autocomplete_address(query)
+        print(f"SUGGESTION:{suggestions}")
+        if not suggestions:
+            await update.message.reply_text("Адрес не найден. Повторите ввод.")
+            return ADDRESS_INPUT
+        
+            # Добавляем короткие адреса
+        for s in suggestions:
+            s["short_label"] = replace_adler_with_kp_regex(shorten_address(s["label"]))
+
+        structured_logger.info(
+            "MAPBOX address suggestion",
+            action = "MAPBOX works",
+            context ={
+                'input_address':query,
+                'suggestion':suggestions
+            }
+
+        )
+        context.user_data["addr_candidates"] = suggestions
+
+        keyboard = [
+            [InlineKeyboardButton(s["short_label"], callback_data=f"addr_{i}")]
+            for i, s in enumerate(suggestions)
+        ]
+        keyboard.append([InlineKeyboardButton("🔁 Не подходит. Ввести заново.", callback_data="addr_retry")])
+        await update.message.reply_text(
+            "Выберите ваш адрес:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return ADDRESS_SELECT
     
-        # Добавляем короткие адреса
-    for s in suggestions:
-        s["short_label"] = replace_adler_with_kp_regex(shorten_address(s["label"]))
-
-
-    context.user_data["addr_candidates"] = suggestions
-
-    keyboard = [
-        [InlineKeyboardButton(s["short_label"], callback_data=f"addr_{i}")]
-        for i, s in enumerate(suggestions)
-    ]
-    keyboard.append([InlineKeyboardButton("🔁 Не подходит. Ввести заново.", callback_data="addr_retry")])
-    await update.message.reply_text(
-        "Выберите ваш адрес:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-    return ADDRESS_SELECT
+    except Exception as e:
+        structured_logger.error(
+            f"Critical error in address excavation: {str(e)}",
+            action="Choose object address",
+            exception=e,
+            context={
+                'error_type': type(e).__name__
+            }
+        )
+        await send_message(update,"Произошла ошибка при выборе адреса. Попробуйте снова.")
+        return ConversationHandler.END
 
 
 # 2. Обрабатываем выбор типа объекта
@@ -291,41 +347,67 @@ async def handle_photos_done(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     if not tg_user_id:
         tg_user_id = update.effective_user.id
-    async with get_async_session() as session:
-        apt = Apartment(
-            address=context.user_data['address'],
-            short_address = context.user_data['address_short'],
-            coordinates = context.user_data["point"],
-            type_id=context.user_data['type_id'],
-            owner_tg_id = tg_user_id,
-            floor=context.user_data['floor'],
-            max_guests = context.user_data['max_guests'],
-            has_elevator=context.user_data['elevator'],
-            pets_allowed=context.user_data['pets_allowed'],
-            has_balcony=context.user_data['balcony'],
-            description=context.user_data['description'],
-            price=context.user_data['price_per_day'],
+    try:
+        async with get_async_session() as session:
+            apt = Apartment(
+                address=context.user_data['address'],
+                short_address = context.user_data['address_short'],
+                coordinates = context.user_data["point"],
+                type_id=context.user_data['type_id'],
+                owner_tg_id = tg_user_id,
+                floor=context.user_data['floor'],
+                max_guests = context.user_data['max_guests'],
+                has_elevator=context.user_data['elevator'],
+                pets_allowed=context.user_data['pets_allowed'],
+                has_balcony=context.user_data['balcony'],
+                description=context.user_data['description'],
+                price=context.user_data['price_per_day'],
+            )
+            session.add(apt)
+            await session.flush()  # apt.id
+
+            for file_id in context.user_data["photos"]:
+                session.add(Image(apartment_id=apt.id, tg_file_id=file_id))
+
+    #        await session.commit()
+            await session.flush()
+
+            await session.refresh(apt, attribute_names=["apartment_type", "images"])
+
+
+            text, media, markup = render_apartment_card_full(apt)
+            structured_logger.info(
+                "New object created",
+                user_id = tg_user_id,
+                action = "Add new object draft",
+                context={
+                    'object_id': apt.id,
+                    'Addess': apt.short_address,
+                    'price': apt.price,
+                    'description': apt.description
+                }
+            )
+            if media:
+                await update.message.reply_media_group(media)
+            await update.message.reply_text(text, reply_markup=markup, parse_mode="HTML")
+
+            await session.commit()
+
+    except Exception as e:
+
+        structured_logger.error(
+            f"Critical error in adding new object: {str(e)}",
+            user_id=tg_user_id,
+            action="Create new object",
+            exception=e,
+            context={
+                'tg_user_id': tg_user_id,
+                'error_type': type(e).__name__
+            }
         )
-        session.add(apt)
-        await session.flush()  # apt.id
-
-        for file_id in context.user_data["photos"]:
-            session.add(Image(apartment_id=apt.id, tg_file_id=file_id))
-
-#        await session.commit()
-        await session.flush()
-
-        await session.refresh(apt, attribute_names=["apartment_type", "images"])
-
-
-        text, media, markup = render_apartment_card_full(apt)
-
-        if media:
-            await update.message.reply_media_group(media)
-        await update.message.reply_text(text, reply_markup=markup, parse_mode="HTML")
-
-        await session.commit()
-        #await update.message.reply_text("✅ Объект успешно добавлен в базу!")
+        await update.message.reply_text(
+            "Произошла ошибка. Попробуйте позже или обратитесь в поддержку."
+        )
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):

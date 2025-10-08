@@ -35,7 +35,8 @@ def prepare_renter_bookings_cards(current_booking: Booking, current_index: int, 
     buttons = [buttons] if buttons else []
     buttons.append([InlineKeyboardButton("🕊 Написать собственнику", callback_data=f"chat_booking_{current_booking.id}"),
                     InlineKeyboardButton("❌ Отменить", callback_data=f"booking_decline_9_{current_booking.id}")])
-    buttons.append([InlineKeyboardButton("🔙 Вернуться в меню", callback_data="back_menu")])
+    buttons.append([InlineKeyboardButton("🔙 Вернуться в меню", callback_data="back_menu"),
+                    InlineKeyboardButton("📍 Показать на карте", callback_data=f"renter_show_map_{current_booking.apartment_id}")])
 
     markup = InlineKeyboardMarkup(buttons)
     
