@@ -108,6 +108,8 @@ def main():
     
     app.add_handler(registration_conversation,group=1) #процесс регистрации (users, sessions), выбор роли
 
+    app.add_handler(busy_calendar, group=1) #обработчик календаря занятости
+
     app.add_handler(add_object_conv,group=1) #процесс создания объекта бронирования
 
     app.add_handler(confirm_apartment_handler,group=1) #проверка и подтверждение создания объекта
@@ -120,7 +122,7 @@ def main():
 
     app.add_handler(booking_chat,group=1)   #обработчик приватных чатов между пользователями
     
-    app.add_handler(busy_calendar, group=1) #обработчик календаря занятости
+   
 
    
 
