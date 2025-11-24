@@ -45,6 +45,16 @@ from utils.logging_config import structured_logger, log_db_select
 from sqlalchemy import update as sa_update, select 
 from sqlalchemy.orm import selectinload
 
+import json
+from telegram.error import TelegramError
+
+def safe_json(obj):
+    """Безопасное преобразование для логов, даже если там non-serializable"""
+    try:
+        return json.dumps(obj, ensure_ascii=False, default=str)
+    except Exception:
+        return str(obj)
+
 
 
 # Состояния диалога
@@ -114,7 +124,7 @@ async def start_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
         structured_logger.error(
             f"Critical error in start new search: {str(e)}",
             user_id=target_chat,
-            action="Create new object",
+            action="Start new object",
             exception=e,
             context={
                 'tg_user_id': target_chat,
@@ -287,6 +297,7 @@ async def handle_price_filter_selection(update: Update, context: ContextTypes.DE
     # Filter apartments
     try:
         apartment_ids = await filter_apartments(update, context)
+        print(f"DEBUG apartment_ids={apartment_ids}, type={type(apartment_ids)}")
         if not apartment_ids:
             return ConversationHandler.END
         
@@ -301,8 +312,8 @@ async def handle_price_filter_selection(update: Update, context: ContextTypes.DE
             "Search filter created",
             action = "search filters implemented",
             context = {
-                'in':check_in,
-                'out':check_out,
+                'in': check_in.isoformat() if check_in else None,
+                'out': check_out.isoformat() if check_out else None,
                 'price_range':price_range,
                 'types': selected_names,
                 'number_candidates': len(apartment_ids) 
@@ -345,7 +356,7 @@ async def show_apartment_card(update: Update, context: ContextTypes.DEFAULT_TYPE
                 .values(current_index=index)
             )
             await session.commit()
-    
+    """  
     # Display apartment
     if query and is_navigation:
         # ✅ Edit existing message (only during navigation)
@@ -370,7 +381,107 @@ async def show_apartment_card(update: Update, context: ContextTypes.DEFAULT_TYPE
             sent = await context.bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode="HTML")
         
         await add_message_to_cleanup(context, sent.chat_id, sent.message_id)
+    """
+    # Display apartment
+    try:
+        if query and is_navigation:
+            structured_logger.debug(
+                "Editing apartment view",
+                context={
+                    "mode": "edit_media" if (media and media[0].media) else "edit_text",
+                    "photo": safe_json(media[0].media if media else None),
+                    "caption/text": text,
+                    "reply_markup": safe_json(markup.to_dict() if markup else None),
+                }
+            )
 
+            photo = media[0].media if media else None
+
+            if photo:
+                await query.message.edit_media(
+                    media=InputMediaPhoto(
+                        media=photo,
+                        caption=text,
+                        parse_mode="HTML"
+                    ),
+                    reply_markup=markup
+                )
+            else:
+                # Отправка нового сообщения
+                await cleanup_messages(context)
+                sent = await send_message(update, text, reply_markup=markup,parse_mode="HTML")
+                await add_message_to_cleanup(context, sent.chat_id, sent.message_id)
+
+        else:
+            chat_id = update.effective_chat.id
+
+            structured_logger.debug(
+                "Sending apartment view",
+                context={
+                    "mode": (
+                        "media_group" if (media and len(media) > 1)
+                        else "photo" if (media and len(media) == 1)
+                        else "text"
+                    ),
+                    "media_list": safe_json([m.media for m in media] if media else None),
+                    "caption/text": text,
+                    "reply_markup": safe_json(markup.to_dict() if markup else None),
+                }
+            )
+
+            if media and len(media) > 1:
+                await context.bot.send_media_group(chat_id=chat_id, media=media)
+                sent = await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=text,
+                    reply_markup=markup,
+                    parse_mode="HTML"
+                )
+
+            elif media and len(media) == 1:
+                sent = await context.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=media[0].media,
+                    caption=text,
+                    reply_markup=markup,
+                    parse_mode="HTML"
+                )
+
+            else:
+                sent = await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=text,
+                    reply_markup=markup,
+                    parse_mode="HTML"
+                )
+
+            await add_message_to_cleanup(context, sent.chat_id, sent.message_id)
+
+    except TelegramError as e:
+        structured_logger.error(
+            "Telegram API error while sending apartment",
+            context={
+                "error": str(e),
+                "media_list": safe_json([m.media for m in media] if media else None),
+                "text": text,
+                "reply_markup": safe_json(markup.to_dict() if markup else None),
+                "is_navigation": is_navigation,
+            }
+        )
+        raise
+
+    except Exception as e:
+        structured_logger.error(
+            "Unexpected error while sending apartment",
+            context={
+                "error": str(e),
+                "media_list": safe_json([m.media for m in media] if media else None),
+                "text": text,
+                "reply_markup": safe_json(markup.to_dict() if markup else None),
+                "is_navigation": is_navigation,
+            }
+        )
+        raise
 
 async def navigate_apartments(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle prev/next navigation."""
@@ -568,7 +679,7 @@ async def filter_apartments(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"DEBUG_DATE_TYPE: {type(check_in)}")
     if not tg_user_id:
         await send_message(update, "Ошибка: не найден user_id. Пожалуйста, начните сначала /start")
-        return None, None
+        return None
 
     # ✅ Получаем список квартир
     apartment_ids, apartments, new_search = await get_apartments(check_in, check_out, session_id, tg_user_id, filters)
@@ -580,7 +691,7 @@ async def filter_apartments(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup = InlineKeyboardMarkup(keyboard)
         await send_message(update, "❌ По выбранным параметрам ничего не найдено.\nПопробуйте изменить фильтры или выбрать другие даты",reply_markup=reply_markup)
 
-        return ConversationHandler.END
+        return []
 
     # ✅ Сохраняем результаты в контексте
     context.user_data.update({

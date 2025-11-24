@@ -8,7 +8,7 @@ registration_conversation = ConversationHandler(
         ASK_PHONE: [MessageHandler(filters.TEXT | filters.CONTACT, handle_phone_registration)],
         MAIN_MENU: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_menu_choice)],
         VIEW_BOOKINGS: [CallbackQueryHandler(show_renter_bookings, pattern=r"^book_(next|prev)_\d+$"),
-                        CallbackQueryHandler(handle_show_map, pattern="^renter_show_map_\d+$"),
+                        CallbackQueryHandler(handle_show_map, pattern=r"^renter_show_map_\d+$"),
                         CallbackQueryHandler(show_main_menu, pattern="^back_menu$")],
         VIEW_OBJECTS: [
             CallbackQueryHandler(show_owner_objects, pattern=r"^apt_(next|prev)_\d+$"),
@@ -18,7 +18,7 @@ registration_conversation = ConversationHandler(
             CallbackQueryHandler(cancel_delete_apartment, pattern=r"^delete_cancel$"),
             CallbackQueryHandler(select_owner_orders, pattern=r"^goto_\d+$"),
             CallbackQueryHandler(handle_show_map, pattern=r"^owner_show_map_\d+$"),
-            CallbackQueryHandler(show_main_menu, pattern=r"^back_menu$")
+            CallbackQueryHandler(show_main_menu, pattern="^back_menu$")
         ],
         EDIT_OBJECT_PROMPT: [
             CallbackQueryHandler(handle_edit_price_start, pattern="^edit_price_start$"),
