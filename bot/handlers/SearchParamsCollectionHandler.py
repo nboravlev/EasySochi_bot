@@ -21,9 +21,9 @@ search_conv = ConversationHandler(
         ],
         VIEWING_APARTMENTS: [
             CallbackQueryHandler(navigate_apartments, pattern="^apt_(prev|next)_\d+$"),
-            CallbackQueryHandler(handle_show_map, pattern="^show_map_\d+$"),
-            CallbackQueryHandler(start_booking, pattern="^book_\d+_\d+(\.\d+)?$"),
-            CallbackQueryHandler(start_search, pattern="^start_search$")
+            CallbackQueryHandler(handle_show_map, pattern=r"^show_map_\d+$"),
+            CallbackQueryHandler(start_booking, pattern=r"^book_\d+_\d+(\.\d+)?$"),
+            CallbackQueryHandler(start_search, pattern=r"^start_search$")
         ],
         ENTERING_GUESTS: [
             MessageHandler(filters.TEXT & ~filters.COMMAND, handle_entering_guest_number)

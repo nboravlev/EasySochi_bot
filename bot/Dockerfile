@@ -17,5 +17,9 @@ COPY . /bot/
 
 RUN chmod +x /bot/entrypoint.sh  
 
-CMD ["/bot/entrypoint.sh"]
+# ENTRYPOINT прописан в образе
+ENTRYPOINT ["/bot/entrypoint.sh"]
+
+# CMD можно оставить универсальным
+CMD ["bot"]
 

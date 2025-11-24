@@ -42,7 +42,7 @@ class Apartment(Base):
     max_guests = Column(Integer, nullable=False)
     description = Column(Text, nullable=True)
     price = Column(Numeric(6, 1), nullable=False)
-    reward = Column(Numeric(4, 2), nullable=True, default=Decimal("7.00"), server_default='7.00')
+    reward = Column(Numeric(4, 2), nullable=True, default=Decimal("0.00"), server_default='0.00')
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     deleted_by = Column(BIGINT, nullable=True, unique=False)

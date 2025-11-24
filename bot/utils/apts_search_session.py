@@ -74,4 +74,5 @@ async def get_apartments(
         session.add(new_search)
         await session.commit()
         print(f"DUBUG_GET_APARTMENT: {apartment_ids},{apartments},{new_search.id}")
+        print(f"DEBUG apartment_ids={apartment_ids}, type={type(apartment_ids)}")
         return apartment_ids, apartments, new_search

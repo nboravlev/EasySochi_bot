@@ -24,17 +24,51 @@ def normalize_row(row, colnames, coltypes):
             new_row.append(value)
     return tuple(new_row)
 
+def reset_sequence(conn, schema_name, table_name, start_from=None):
+    """
+    Сбрасывает sequence для таблицы после копирования данных.
+    Если start_from не задан, устанавливает MAX(id)+1.
+   """
+    seq_name = f"{table_name}_id_seq"
+
+    with conn.cursor() as cur:
+         #Проверяем, существует ли sequence
+        cur.execute(sql.SQL("""
+        SELECT 1 FROM information_schema.sequences
+        WHERE sequence_schema = %s AND sequence_name = %s
+    """), (schema_name, seq_name))
+
+        if not cur.fetchone():
+            print(f"⚠️ Sequence {schema_name}.{seq_name} не найдена, пропускаем.")
+            return
+
+        # Определяем значение для старта
+        if start_from is None:
+            cur.execute(sql.SQL("SELECT COALESCE(MAX(id), 0) + 1 FROM {}.{}")
+                        .format(sql.Identifier(schema_name),
+                                sql.Identifier(table_name)))
+            start_from = cur.fetchone()[0]
+
+        cur.execute(sql.SQL("ALTER SEQUENCE {}.{} RESTART WITH %s")
+                    .format(sql.Identifier(schema_name),
+                            sql.Identifier(seq_name)),
+                    (start_from,))
+        conn.commit()
+
+        print(f"🔁 Sequence {schema_name}.{seq_name} сброшен, новое значение: {start_from}")
+
 def copy_tables(schema_name, table_names):
     # Подключения
     prod_conn = psycopg2.connect(
-        host="89.169.187.49",
+        host="192.168.1.109",
+        port = 5432,
         database="tg_app_bd",
         user="tg_app_bd_admin",
         password="fgt4567Qh780"
     )
     test_conn = psycopg2.connect(
-        host="89.169.181.200",
-        port = "5433",
+        host="192.168.1.109",
+        port = 5433,
         database="tg_app_test",
         user="tg_app_bd_test",
         password="1234qazwsx_cvbn"
@@ -81,14 +115,31 @@ def copy_tables(schema_name, table_names):
             test_conn.commit()
 
             print(f"Таблица {table_name}: скопировано {len(rows)} строк.")
+                        # Сбрасываем sequence
+            reset_sequence(test_conn, schema_name, table_name)
+
+    print("🎯 Копирование завершено.")
 
     print("Копирование завершено.")
 
 def main():
-    schema_name = "public"
-    table_names = ["sessions","search_sessions"]  # список таблиц
+    schema_name = "apartments"
+    table_names = ["apartment_types","apartments"]  # список таблиц
     
     copy_tables(schema_name, table_names)
 
+def main():
+    schema_name = "media"
+    table_names = ["images"]  # список таблиц
+    
+    copy_tables(schema_name, table_names)
+
+"""
+def main():
+    schema_name = "public"
+    table_names = ["roles","booking_types","sources","users","sessions","search_sessions","bookings"]  # список таблиц
+    
+    copy_tables(schema_name, table_names)
+"""
 if __name__ == "__main__":
     main()
