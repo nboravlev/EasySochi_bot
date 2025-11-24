@@ -1,0 +1,9 @@
+from db.db import Base
+from db.db_async import Base
+from db import models  # Это важно — чтобы импортнулись все модели
+
+
+
+
+
+

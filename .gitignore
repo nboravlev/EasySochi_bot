@@ -1,0 +1,59 @@
+# Docker
+*.log
+*.pid
+__pycache__/
+*.pyc
+
+# Python
+.env
+.venv/
+*.sqlite3
+
+# Secrets
+secrets/
+
+# VSCode / IDE
+.vscode/
+.idea/
+
+# PostgreSQL
+pgdata/
+postgres_data/
+
+# Docker volumes
+volumes/
+
+
+# виртуальное окружение
+venv/
+.venv/
+
+# файлы среды и токены
+.env
+*.env
+secrets/
+*.pyc
+__pycache__/
+
+# временные файлы IDE
+*.swp
+.vscode/
+.idea/
+
+#alembic
+alembic/versions/
+
+reset_db.py
+
+docs/progress.md
+
+#монитор БД
+bot/db_monitor.py
+
+#локальные файлы конфигурации
+docker-compose.yml
+/db/postgresql.conf
+/log_viewer/log_viewer.py
+/log_viewer/Dockerfile
+/bot/db/db_async.py
+/bot/entrypoint.sh
