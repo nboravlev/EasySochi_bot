@@ -21,11 +21,11 @@ from db_monitor import check_db
 from booking_expired_monitor import check_expired_booking
 from booking_complit_monitor import check_complit_booking
 from my_daily_stats import collect_daily_stats
-
+from run_notify import scheduled_notify
 
 import os
 from pathlib import Path
-from datetime import time
+from datetime import time, datetime, timedelta
 
 
 import os
@@ -81,7 +81,16 @@ async def post_init(application: Application) -> None:
         time=time(hour=20, minute=50, second=0),
         name="daily_stats_job"
     )
+    #рассылка
+    
+    #run_time = datetime.utcnow() + timedelta(seconds=10)
+    run_time = datetime(year=2025, month=11, day=28, hour=6, minute=00, second=0)
 
+    application.job_queue.run_once(
+        scheduled_notify,
+        when=run_time,
+        name="new_year_notify_once"
+    )
 
 def main():
     BOT_TOKEN = os.getenv("BOT_TOKEN")
