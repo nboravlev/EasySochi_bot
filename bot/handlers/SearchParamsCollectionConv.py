@@ -607,8 +607,8 @@ async def finalize_booking (update: Update, context: ContextTypes.DEFAULT_TYPE):
                     'booking_id':Booking.id,
                     'Address': Booking.apartment.short_address,
                     'Price': Booking.total_price,
-                    'in': Booking.check_in,
-                    'out':Booking.check_out
+                    'in': Booking.check_in.isoformat() if Booking.check_in else None,
+                    'out': Booking.check_out.isoformat() if Booking.check_out else None
                 
                 }
             )
