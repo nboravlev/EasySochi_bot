@@ -1,0 +1,77 @@
+services:
+  db_rent:
+    build: ./db
+    container_name: postgres_db_rent
+    restart: always
+    env_file: .env
+    # Используем стандартный запуск, переменные из .env подхватятся автоматически
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - PGPORT=5432
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres_data_rent:/var/lib/postgresql/data
+    networks:
+      - tg_app_net_rent
+    healthcheck:
+      # Упрощенный чек без cat и secrets
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432 -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 25s
+      timeout: 5s
+      retries: 5
+
+  bot_rent:
+    build: ./bot
+    container_name: tg_bot_rent
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - LOG_LEVEL=INFO
+      - LOG_DIR=/app/logs
+      - ENABLE_LOG_VIEWER=true
+      - PYTHONPATH=/bot
+      # Эти переменные теперь попадут в entrypoint.sh напрямую из .env
+      - DB_HOST=db_rent
+      - POSTGRES_PORT=5432
+    volumes:
+      - ./bot:/bot
+      - bot_logs_rent:/app/logs
+    depends_on:
+      db_rent:
+        condition: service_healthy
+    networks:
+      - tg_app_net_rent
+    command: ["bot"]
+
+  log-viewer_rent:
+    build: ./log_viewer
+    container_name: log_viewer_rent
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      - bot_rent
+    volumes:
+      - bot_logs_rent:/app/logs:ro
+    ports:
+      - "${LOG_VIEWER_PORT}:${LOG_VIEWER_PORT}"
+    environment:
+      - LOG_DIR=/app/logs
+      - LOG_VIEWER_PORT=${LOG_VIEWER_PORT}
+      - LOG_VIEWER_HOST=${LOG_VIEWER_HOST:-0.0.0.0}
+    networks:
+      - tg_app_net_rent
+
+volumes:
+  # Подключаем твой существующий том
+  postgres_data_rent:
+    external: true
+    name: easysochi_temp_postgres_data_rent
+  bot_logs_rent:
+
+networks:
+  tg_app_net_rent:
+    driver: bridge

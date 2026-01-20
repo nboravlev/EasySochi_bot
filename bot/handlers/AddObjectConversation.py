@@ -1,0 +1,419 @@
+from telegram import (
+    Update,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
+    KeyboardButton
+)
+from telegram.ext import (
+    ConversationHandler,
+    CommandHandler,
+    MessageHandler,
+    CallbackQueryHandler,
+    ContextTypes,
+    filters
+)
+
+from db.db_async import get_async_session
+
+from db.models.apartment_types import ApartmentType
+from db.models.apartments import Apartment
+from db.models.images import Image
+from db.models.search_sessions import SearchSession
+
+from utils.geocoding import autocomplete_address
+from utils.replace_index_in_address import replace_adler_with_kp_regex
+from geoalchemy2.shape import from_shape
+from shapely.geometry import Point
+from utils.session_timeout import set_timeout
+from utils.session_timeout import SessionTimeoutManager
+from utils.escape import safe_html
+from utils.message_tricks import sanitize_message, send_message, add_message_to_cleanup, cleanup_messages
+
+from utils.full_view_owner import render_apartment_card_full
+
+from utils.logging_config import structured_logger, LoggingContext
+
+# Состояния
+(
+    ADDRESS_INPUT,
+    ADDRESS_SELECT,
+    APARTMENT_TYPE_SELECTION,
+    FLOOR,
+    ELEVATOR,
+    MAX_GUESTS,
+    PETS,
+    BALCONY,
+    DESCRIPTION,
+    PRICE,
+    PHOTOS,
+    CONFIRMATION
+) = range(12)
+
+
+
+async def start_add_object(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Начало добавления объекта: обработка как команды, так и колбэка"""
+    # Определяем источник вызова
+    try:
+        if update.callback_query:
+            query = update.callback_query
+            await query.answer()
+            # Убираем кнопки у старого сообщения
+            await query.edit_message_reply_markup(reply_markup=None)
+            target_chat = query.message.chat_id
+        else:
+            target_chat = update.effective_chat.id
+
+        # Отправляем первое сообщение сценария добавления
+        await context.bot.send_message(
+            chat_id=target_chat,
+            text="Давайте добавим ваш объект!\nВведите адрес или его часть:"
+        )
+        structured_logger.info(
+            "Start add_object command",
+            user_id = target_chat,
+            action = "start add_object",
+            context = {}
+        )
+
+        return ADDRESS_INPUT
+    except Exception as e:
+        # LoggingContext will automatically log the error with full context
+        structured_logger.error(
+            f"Critical error in start add_object: {str(e)}",
+            user_id=target_chat,
+            action="Add_object command error",
+            exception=e,
+            context={
+                'tg_user_id': target_chat,
+                'error_type': type(e).__name__
+            }
+        )
+        await update.message.reply_text(
+            "Произошла ошибка. Попробуйте позже или обратитесь в поддержку."
+        )
+        return ConversationHandler.END
+
+def shorten_address(label: str, keep_parts: int = 4) -> str:
+    parts = label.split(", ")
+    if len(parts) > keep_parts:
+        return ", ".join(parts[-keep_parts:])
+    return label
+
+# ⬇️ Выбор из подсказок
+async def handle_address_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    try:
+        index_str = query.data.replace("addr_", "")
+        if index_str == "retry":
+            await query.edit_message_text("Введите адрес заново:")
+            return ADDRESS_INPUT
+        
+        index = int(index_str)
+        selected = context.user_data["addr_candidates"][index]
+        structured_logger.info(
+            "Choosing object addres",
+            action = "Choose object address",
+            context={'candidate_adress':selected}
+        )
+
+    except Exception as e:
+        structured_logger.error(
+            f"Critical error in address excavation: {str(e)}",
+            action="Choose object address",
+            exception=e,
+            context={
+                'error_type': type(e).__name__
+            }
+        )
+        await send_message(update,"Произошла ошибка при выборе адреса. Попробуйте снова.")
+        return ConversationHandler.END
+
+
+    label = selected["label"]
+    short_label_zipcode = shorten_address(label)
+    short_label = replace_adler_with_kp_regex(short_label_zipcode)
+    lat = selected["lat"]
+    lon = selected["lon"]
+    point = from_shape(Point(lon, lat), srid=4326)
+
+    context.user_data["address"] = label
+    context.user_data["address_short"] = short_label
+    context.user_data["lat"] = lat
+    context.user_data["lon"] = lon
+    context.user_data["point"] = point
+
+    print(f"[DEBUG] Выбран адрес: {label} ({lat}, {lon})")
+    # Показываем кнопки типа объекта прямо здесь
+    async with get_async_session() as session:
+        result = await session.execute(ApartmentType.__table__.select())
+        types = result.fetchall()
+
+        keyboard = [
+            [InlineKeyboardButton(t.name, callback_data=str(t.id))] for t in types
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await query.edit_message_text(
+        f"Адрес выбран: {label}\n\nТеперь выберите тип объекта:",
+        reply_markup=reply_markup
+    )
+    return APARTMENT_TYPE_SELECTION  # 👈 тут правильное следующее состояние
+
+
+# ⬇️ Обработка текста адреса. Блоки местами перепутаны как будто.
+async def handle_address_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        query = update.message.text
+        suggestions = await autocomplete_address(query)
+        print(f"SUGGESTION:{suggestions}")
+        if not suggestions:
+            await update.message.reply_text("Адрес не найден. Повторите ввод.")
+            return ADDRESS_INPUT
+        
+            # Добавляем короткие адреса
+        for s in suggestions:
+            s["short_label"] = replace_adler_with_kp_regex(shorten_address(s["label"]))
+
+        structured_logger.info(
+            "MAPBOX address suggestion",
+            action = "MAPBOX works",
+            context ={
+                'input_address':query,
+                'suggestion':suggestions
+            }
+
+        )
+        context.user_data["addr_candidates"] = suggestions
+
+        keyboard = [
+            [InlineKeyboardButton(s["short_label"], callback_data=f"addr_{i}")]
+            for i, s in enumerate(suggestions)
+        ]
+        keyboard.append([InlineKeyboardButton("🔁 Не подходит. Ввести заново.", callback_data="addr_retry")])
+        await update.message.reply_text(
+            "Выберите ваш адрес:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return ADDRESS_SELECT
+    
+    except Exception as e:
+        structured_logger.error(
+            f"Critical error in address excavation: {str(e)}",
+            action="Choose object address",
+            exception=e,
+            context={
+                'error_type': type(e).__name__
+            }
+        )
+        await send_message(update,"Произошла ошибка при выборе адреса. Попробуйте снова.")
+        return ConversationHandler.END
+
+
+# 2. Обрабатываем выбор типа объекта
+async def handle_apartment_type_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    try:
+        type_id = int(query.data.replace("type_", ""))
+        context.user_data["type_id"] = type_id
+    except Exception as e:
+        print(f"[ERROR] Не удалось извлечь тип объекта: {e}")
+        await query.edit_message_text("Ошибка при выборе типа объекта. Попробуйте снова.")
+        return APARTMENT_TYPE_SELECTION
+
+    await query.message.reply_text("Этаж:")
+    return FLOOR
+
+# ⬇️ Этаж
+async def handle_floor(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    
+    # Reset 300-second timer
+    #await SessionTimeoutManager.set_timeout(context, user_id) - сброс сессии.
+    try:
+        floor = int(update.message.text)
+        if floor <= 0:
+            raise ValueError
+        context.user_data["floor"] = floor
+    except ValueError:
+        await update.message.reply_text("Введите корректное число (>0):")
+        return FLOOR
+
+    await update.message.reply_text("Максимум гостей:")
+    return MAX_GUESTS
+
+# ⬇️ Максимум гостей
+async def handle_maxguests(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        max_guests = int(update.message.text)
+        if max_guests <= 0:
+            raise ValueError
+        context.user_data["max_guests"] = max_guests
+    except ValueError:
+        await update.message.reply_text("Введите разумное число (>0):")
+        return MAX_GUESTS
+
+    reply = ReplyKeyboardMarkup([["Да", "Нет"]], one_time_keyboard=True, resize_keyboard=True)
+    await update.message.reply_text("Есть ли лифт в доме?", reply_markup=reply)
+    return ELEVATOR
+
+# ⬇️ Лифт → Животные → Балкон
+async def handle_elevator(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["elevator"] = update.message.text.lower() == "да"
+    reply = ReplyKeyboardMarkup([["Да", "Нет"]], one_time_keyboard=True, resize_keyboard=True)
+    await update.message.reply_text("Можно ли с животными?", reply_markup=reply)
+    return PETS
+
+async def handle_pets(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["pets_allowed"] = update.message.text.lower() == "да"
+    reply = ReplyKeyboardMarkup([["Да", "Нет"]], one_time_keyboard=True, resize_keyboard=True)
+    await update.message.reply_text("Есть ли балкон?", reply_markup=reply)
+    return BALCONY
+
+async def handle_balcony(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["balcony"] = update.message.text.lower() == "да"
+    # Запрашиваем комментарий
+    keyboard = [[KeyboardButton("без описания")]]
+    await update.message.reply_text(
+            "🏕 Напишите не очень длинное, привлекательное описание, или нажмите кнопку, чтобы пропустить:",
+            reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+        )
+    return DESCRIPTION
+
+# ⬇️ Описание и цена
+async def handle_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    description = update.message.text.strip()
+
+    if not description or description.lower() == "без описания":
+        description = "Собственник не предоставил доп.информации"
+    else:
+        description = sanitize_message(description)[:255]
+    context.user_data["description"] = description
+    await update.message.reply_text("Введите цену за сутки в рублях:")
+    return PRICE
+
+async def handle_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        price = int(update.message.text)
+        if price <= 0 or price > 99999:
+            raise ValueError
+        context.user_data["price_per_day"] = price
+    except ValueError:
+        await update.message.reply_text("Введите число от 0 до 99999:")
+        return PRICE
+
+    context.user_data["photos"] = []
+    await update.message.reply_text(
+    "Загрузите фото объекта (не более 10). "
+    "Отправьте все фото, затем нажмите «Готово».",
+    reply_markup=ReplyKeyboardMarkup(
+        [[KeyboardButton("Готово")]],
+        resize_keyboard=True,
+        one_time_keyboard=False
+        )
+    )
+    return PHOTOS
+
+# ⬇️ Фото
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    photo = update.message.photo[-1]
+    file_id = photo.file_id
+
+    context.user_data.setdefault("photos", []).append(file_id)
+
+    print(f"[DEBUG] Добавлено фото: {file_id}")
+    print(f"[DEBUG] Все фото: {context.user_data['photos']}")
+    await update.message.reply_text(
+        f"Фото добавлено ({len(context.user_data['photos'])} шт.). "
+        "Загрузите ещё или нажмите «Готово».",
+        reply_markup=ReplyKeyboardMarkup(
+            [[KeyboardButton("Готово")]],
+            resize_keyboard=True,
+            one_time_keyboard=True
+        )
+    )
+    return PHOTOS
+
+async def handle_photos_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print(f"[DEBUG] context.user_data: {context.user_data}")
+    tg_user_id = context.user_data.get("tg_user_id")
+    
+    if not tg_user_id:
+        tg_user_id = update.effective_user.id
+    try:
+        async with get_async_session() as session:
+            apt = Apartment(
+                address=context.user_data['address'],
+                short_address = context.user_data['address_short'],
+                coordinates = context.user_data["point"],
+                type_id=context.user_data['type_id'],
+                owner_tg_id = tg_user_id,
+                floor=context.user_data['floor'],
+                max_guests = context.user_data['max_guests'],
+                has_elevator=context.user_data['elevator'],
+                pets_allowed=context.user_data['pets_allowed'],
+                has_balcony=context.user_data['balcony'],
+                description=context.user_data['description'],
+                price=context.user_data['price_per_day'],
+            )
+            session.add(apt)
+            await session.flush()  # apt.id
+
+            for file_id in context.user_data["photos"]:
+                session.add(Image(apartment_id=apt.id, tg_file_id=file_id))
+
+    #        await session.commit()
+            await session.flush()
+
+            await session.refresh(apt, attribute_names=["apartment_type", "images"])
+
+
+            text, media, markup = render_apartment_card_full(apt)
+            structured_logger.info(
+                "New object created",
+                user_id = tg_user_id,
+                action = "Add new object draft",
+                context={
+                    'object_id': apt.id,
+                    'Addess': apt.short_address,
+                    'price': apt.price,
+                    'description': apt.description
+                }
+            )
+            if media:
+                await update.message.reply_media_group(media)
+            await update.message.reply_text(text, reply_markup=markup, parse_mode="HTML")
+
+            await session.commit()
+
+    except Exception as e:
+
+        structured_logger.error(
+            f"Critical error in adding new object: {str(e)}",
+            user_id=tg_user_id,
+            action="Create new object",
+            exception=e,
+            context={
+                'tg_user_id': tg_user_id,
+                'error_type': type(e).__name__
+            }
+        )
+        await update.message.reply_text(
+            "Произошла ошибка. Попробуйте позже или обратитесь в поддержку."
+        )
+    return ConversationHandler.END
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "❌ Отмена добавления объекта.",
+        reply_markup=ReplyKeyboardRemove()
+    )
+    context.user_data.clear()
+    return ConversationHandler.END
