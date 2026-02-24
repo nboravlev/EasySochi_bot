@@ -22,6 +22,23 @@ Telegram-бот для посуточной аренды жилья в Сочи.
 
 --
 
+### Пути на хосте и права доступа
+Перед запуском проекта необходимо создать директории и настроить владельцев:
+
+| Сервис | Путь на хосте | UID:GID | Описание |
+| :--- | :--- | :--- | :--- |
+| **db_rent** | `/data/easysochi/postgres_booking` | `999:999` | Данные PostgreSQL |
+| **bot_rent** | `/data/easysochi/media_booking` | `1000:1000` | Медиа-файлы бота |
+| **logs** | `/data/easysochi/logs_booking` | `1000:1000` | Логи бота для вьюера |
+
+### Команды для подготовки окружения
+```bash
+sudo mkdir -p /data/easysochi/{postgres_booking,media_booking,logs_booking}
+sudo chown -R 999:999 /data/easysochi/postgres_booking
+sudo chown -R 1000:1000 /data/easysochi/media_rent /data/easysochi/logs_rent
+sudo chmod -R 750 /data/easysochi/
+```
+
 ##  Быстрый запуск
 
 > Убедитесь, что установлены Docker и Docker Compose

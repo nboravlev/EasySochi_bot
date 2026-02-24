@@ -17,6 +17,13 @@ COPY . /bot/
 
 RUN chmod +x /bot/entrypoint.sh  
 
+# Create non-root user for security and set proper permissions
+RUN useradd -m -u 1000 bookingbot && \
+    chown -R bookingbot:bookingbot /bot
+
+# Switch to non-root user
+USER bookingbot
+
 # ENTRYPOINT прописан в образе
 ENTRYPOINT ["/bot/entrypoint.sh"]
 

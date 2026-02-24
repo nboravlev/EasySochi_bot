@@ -18,7 +18,6 @@ services:
     networks:
       - tg_app_net_rent
     healthcheck:
-      # Упрощенный чек без cat и secrets
       test: ["CMD-SHELL", "pg_isready -h localhost -p 5432 -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 25s
       timeout: 5s
@@ -26,6 +25,7 @@ services:
 
   bot_rent:
     build: ./bot
+    user: "1000:1000"
     container_name: tg_bot_rent
     restart: unless-stopped
     env_file: .env
@@ -34,12 +34,12 @@ services:
       - LOG_DIR=/app/logs
       - ENABLE_LOG_VIEWER=true
       - PYTHONPATH=/bot
-      # Эти переменные теперь попадут в entrypoint.sh напрямую из .env
       - DB_HOST=db_rent
       - POSTGRES_PORT=5432
     volumes:
       - ./bot:/bot
       - bot_logs_rent:/app/logs
+      - bot_media_rent:/app/media
     depends_on:
       db_rent:
         condition: service_healthy
@@ -49,6 +49,7 @@ services:
 
   log-viewer_rent:
     build: ./log_viewer
+    user: "1000:1000"
     container_name: log_viewer_rent
     restart: unless-stopped
     env_file: .env
@@ -66,12 +67,25 @@ services:
       - tg_app_net_rent
 
 volumes:
-  # Подключаем твой существующий том
   postgres_data_rent:
-    external: true
-    name: easysochi_temp_postgres_data_rent
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /data/easysochi/postgres_booking
+  media_rent:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /data/easysochi/media_booking
   bot_logs_rent:
-
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /data/easysochi/logs_booking
+  
 networks:
   tg_app_net_rent:
     driver: bridge
