@@ -39,7 +39,7 @@ services:
     volumes:
       - ./bot:/bot
       - bot_logs_rent:/app/logs
-      - bot_media_rent:/app/media
+      - media_rent:/app/media
     depends_on:
       db_rent:
         condition: service_healthy
